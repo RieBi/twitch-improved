@@ -1,49 +1,91 @@
-import React from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { createRoot } from "react-dom/client";
+import browser from "webextension-polyfill";
 import "./styles.css";
+import { sendMsg } from "../../lib/messaging";
+import { defaultSettings, loadSettings, saveSettings, type Settings } from "../../lib/settings";
+import { DeclutterSection } from "./components/DeclutterSection";
+import { HeatmapSection } from "./components/HeatmapSection";
 
 function App() {
+  const [settings, setSettings] = useState<Settings>(defaultSettings);
+  const [loading, setLoading] = useState(true);
+  const [saveError, setSaveError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const init = async () => {
+      try {
+        const loaded = await loadSettings(browser.storage.sync);
+        if (!cancelled) {
+          setSettings(loaded);
+        }
+      } catch (error) {
+        if (!cancelled) {
+          setSaveError(error instanceof Error ? error.message : "Failed to load settings.");
+        }
+      } finally {
+        if (!cancelled) {
+          setLoading(false);
+        }
+      }
+    };
+
+    void init();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const statusText = useMemo(() => {
+    if (loading) {
+      return "Loading settings...";
+    }
+
+    return saveError ? `Error: ${saveError}` : "Changes save automatically.";
+  }, [loading, saveError]);
+
+  const persistSettings = (next: Settings) => {
+    setSettings(next);
+    setSaveError(null);
+    void saveSettings(next, browser.storage.sync)
+      .then((normalized) => {
+        setSettings(normalized);
+        void sendMsg<void>({ type: "settingsChanged" }).catch((error) => {
+          // Settings are already persisted; ignore transient background messaging issues.
+          console.warn("Failed to dispatch settingsChanged.", error);
+        });
+      })
+      .catch((error) => {
+        setSaveError(error instanceof Error ? error.message : "Failed to save settings.");
+      });
+  };
+
   return (
     <main className="app">
       <header className="app-header">
         <h1>Twitch Improved</h1>
-        <p className="app-subtitle">Milestone 1 options shell</p>
+        <p className="app-subtitle">{statusText}</p>
       </header>
 
-      <section className="panel" aria-labelledby="declutter-heading">
-        <h2 id="declutter-heading">Declutter</h2>
-        <p className="panel-description">
-          Configure what recommendation blocks should be hidden on Twitch pages.
-        </p>
-        <ul className="placeholder-list">
-          <li>Main feed toggles</li>
-          <li>Channel page toggles</li>
-          <li>Sidebar toggles</li>
-        </ul>
-      </section>
+      <DeclutterSection
+        value={settings.declutter}
+        onChange={(declutter) => persistSettings({ ...settings, declutter })}
+      />
 
-      <section className="panel" aria-labelledby="heatmap-heading">
-        <h2 id="heatmap-heading">Watch heatmap</h2>
-        <p className="panel-description">
-          Configure watched thresholds, indicator style, and tracking behavior.
-        </p>
-        <ul className="placeholder-list">
-          <li>Enable and threshold controls</li>
-          <li>Tile and player-bar display controls</li>
-          <li>Live tracking behavior controls</li>
-        </ul>
-      </section>
+      <HeatmapSection
+        title="Watch heatmap"
+        value={settings.heatmap}
+        onChange={(heatmap) => persistSettings({ ...settings, heatmap })}
+      />
 
       <section className="panel" aria-labelledby="data-heading">
         <h2 id="data-heading">Data</h2>
         <p className="panel-description">
-          Manage local storage and diagnostic information.
+          Data controls are part of a later milestone. This section will expose usage, export/import, and diagnostics.
         </p>
-        <ul className="placeholder-list">
-          <li>Storage usage</li>
-          <li>Clear all, export, import</li>
-          <li>Selector diagnostics</li>
-        </ul>
       </section>
     </main>
   );
