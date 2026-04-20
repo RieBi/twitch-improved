@@ -4,6 +4,7 @@ const STREAM_EVENT_NAME = "td:stream-meta";
 const VOD_EVENT_NAME = "td:vod-meta";
 const VOD_TILE_EVENT_NAME = "td:vod-tile-meta";
 const SHOULD_LOG_METADATA = import.meta.env.DEV;
+const isVodPage = (): boolean => window.location.pathname.startsWith("/videos/");
 
 const metadataState = {
   initialized: false,
@@ -61,7 +62,7 @@ const onStreamMeta = (event: Event): void => {
   }
 
   metadataState.latestStream = event.detail;
-  if (SHOULD_LOG_METADATA) {
+  if (SHOULD_LOG_METADATA && !isVodPage()) {
     console.info("[td][metadata][live]", {
       streamStartedAt: event.detail.streamStartedAt,
       streamId: event.detail.streamId,

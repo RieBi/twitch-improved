@@ -78,7 +78,30 @@ export const installMainWorldMetadataBridge = (): void => {
   const makeVodSignature = (vod: BridgeVodMeta): string =>
     `${vod.vodId}:${vod.channelId}:${vod.durationSeconds ?? "na"}:${vod.createdAt ?? "na"}`;
 
-  const extractChannel = (node: Record<string, unknown>): { channelId: string; channelLogin: string } | null => {
+  const resolveApolloRef = (
+    value: unknown,
+    entities?: Record<string, Record<string, unknown>>
+  ): Record<string, unknown> | null => {
+    if (!isRecord(value)) {
+      return null;
+    }
+
+    if (!entities) {
+      return value;
+    }
+
+    const ref = readString(value.__ref);
+    if (!ref) {
+      return value;
+    }
+
+    return entities[ref] ?? null;
+  };
+
+  const extractChannel = (
+    node: Record<string, unknown>,
+    entities?: Record<string, Record<string, unknown>>
+  ): { channelId: string; channelLogin: string } | null => {
     const candidateNodes: unknown[] = [
       node,
       node.channel,
@@ -88,12 +111,13 @@ export const installMainWorldMetadataBridge = (): void => {
     ];
 
     for (const candidate of candidateNodes) {
-      if (!isRecord(candidate)) {
+      const resolved = resolveApolloRef(candidate, entities);
+      if (!resolved) {
         continue;
       }
 
-      const channelId = readString(candidate.id);
-      const channelLogin = readString(candidate.login);
+      const channelId = readString(resolved.id);
+      const channelLogin = readString(resolved.login);
       if (channelId && channelLogin) {
         return { channelId, channelLogin };
       }
@@ -111,6 +135,11 @@ export const installMainWorldMetadataBridge = (): void => {
 
       for (const streamCandidate of streamCandidates) {
         if (!isRecord(streamCandidate)) {
+          continue;
+        }
+
+        const typename = readString(streamCandidate.__typename);
+        if (typename && typename !== "Stream") {
           continue;
         }
 
@@ -157,7 +186,17 @@ export const installMainWorldMetadataBridge = (): void => {
     return null;
   };
 
-  const extractVod = (candidate: Record<string, unknown>, source: MetadataSource, observedAt: number): BridgeVodMeta | null => {
+  const extractVod = (
+    candidate: Record<string, unknown>,
+    source: MetadataSource,
+    observedAt: number,
+    entities?: Record<string, Record<string, unknown>>
+  ): BridgeVodMeta | null => {
+    const typename = readString(candidate.__typename);
+    if (typename && typename !== "Video") {
+      return null;
+    }
+
     const vodId = readString(candidate.id);
     if (!vodId) {
       return null;
@@ -165,7 +204,7 @@ export const installMainWorldMetadataBridge = (): void => {
 
     const durationSeconds = readDurationSeconds(candidate.lengthSeconds ?? candidate.durationSeconds);
     const createdAt = readEpochMs(candidate.publishedAt ?? candidate.createdAt);
-    const channel = extractChannel(candidate);
+    const channel = extractChannel(candidate, entities);
 
     if (!channel || durationSeconds === null) {
       return null;
@@ -274,7 +313,73 @@ export const installMainWorldMetadataBridge = (): void => {
     }
 
     try {
-      emitFromPayload(cacheExtract(), "apollo");
+      const extracted = cacheExtract();
+      emitFromPayload(extracted, "apollo");
+
+      if (!isRecord(extracted)) {
+        return;
+      }
+
+      const entities: Record<string, Record<string, unknown>> = {};
+      for (const [key, value] of Object.entries(extracted)) {
+        if (!isRecord(value)) {
+          continue;
+        }
+        entities[key] = value;
+      }
+
+      const observedAt = Date.now();
+      const streams = new Map<string, BridgeStreamMeta>();
+      const vods = new Map<string, BridgeVodMeta>();
+
+      for (const [entityKey, entity] of Object.entries(entities)) {
+        if (entityKey.startsWith("Stream:")) {
+          const streamId = readString(entity.id);
+          const streamStartedAt = readEpochMs(entity.createdAt);
+          const channel = extractChannel(entity, entities);
+          if (!streamId || streamStartedAt === null || !channel) {
+            continue;
+          }
+
+          const stream: BridgeStreamMeta = {
+            streamId,
+            streamStartedAt,
+            channelId: channel.channelId,
+            channelLogin: channel.channelLogin,
+            source: "apollo",
+            observedAt
+          };
+          streams.set(makeStreamSignature(stream), stream);
+          continue;
+        }
+
+        if (entityKey.startsWith("Video:")) {
+          const vod = extractVod(entity, "apollo", observedAt, entities);
+          if (!vod) {
+            continue;
+          }
+          vods.set(makeVodSignature(vod), vod);
+        }
+      }
+
+      for (const stream of streams.values()) {
+        dispatchBridgeEvent(STREAM_EVENT_NAME, stream);
+      }
+
+      if (vods.size === 0) {
+        return;
+      }
+
+      const apolloVods = Array.from(vods.values());
+      for (const vod of apolloVods) {
+        dispatchBridgeEvent(VOD_EVENT_NAME, vod);
+      }
+
+      dispatchBridgeEvent(VOD_TILE_EVENT_NAME, {
+        source: "apollo",
+        observedAt,
+        vods: apolloVods
+      } satisfies BridgeVodTileMeta);
     } catch {
       // Twitch can change cache shape at any time; fail soft.
     }

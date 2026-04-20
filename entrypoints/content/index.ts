@@ -1,5 +1,7 @@
 import { initDeclutter } from "./declutter";
 import { initStreamMetadata } from "./tracker/streamMetadata";
+import { startVodTracker } from "./tracker/vodTracker";
+import { createVodTrackerLifecycle } from "./tracker/vodTrackerLifecycle";
 import { sendMsg } from "../../lib/messaging";
 
 export default defineContentScript({
@@ -10,9 +12,11 @@ export default defineContentScript({
     await sendMsg<{ ok: boolean }>({ type: "ensureMetadataBridge" }).catch(() => undefined);
 
     const declutter = await initDeclutter();
+    const vodTrackerLifecycle = createVodTrackerLifecycle(startVodTracker);
 
     const notifyRouteChange = (): void => {
       declutter.refresh();
+      void vodTrackerLifecycle.sync(new URL(window.location.href));
     };
 
     const patchHistoryMethod = (method: "pushState" | "replaceState"): void => {
@@ -30,5 +34,6 @@ export default defineContentScript({
     patchHistoryMethod("pushState");
     patchHistoryMethod("replaceState");
     window.addEventListener("popstate", notifyRouteChange);
+    void vodTrackerLifecycle.sync(new URL(window.location.href));
   }
 });

@@ -1,5 +1,6 @@
 import browser from "webextension-polyfill";
 import type { Msg } from "../lib/messaging";
+import { applyVodFlush } from "../lib/vodFlush";
 import { installMainWorldMetadataBridge } from "./content/injected/mainWorld";
 
 interface SelectorMissEvent {
@@ -10,6 +11,7 @@ interface SelectorMissEvent {
 
 const MAX_SELECTOR_MISSES = 100;
 const selectorMissBuffer: SelectorMissEvent[] = [];
+const SHOULD_LOG_FLUSH_DEBUG = import.meta.env.DEV;
 
 const pushSelectorMiss = (entry: SelectorMissEvent): void => {
   selectorMissBuffer.push(entry);
@@ -34,6 +36,21 @@ const executeMainWorldBridge = async (tabId: number, frameId: number): Promise<v
     target: { tabId, frameIds: [frameId] },
     func: installMainWorldMetadataBridge
   });
+};
+
+const broadcastVodRecordChanged = async (
+  payload: Extract<Msg, { type: "vodRecordChanged" }>
+): Promise<void> => {
+  const tabs = await browser.tabs.query({});
+  await Promise.all(
+    tabs.map(async (tab) => {
+      if (tab.id === undefined) {
+        return;
+      }
+
+      await browser.tabs.sendMessage(tab.id, payload).catch(() => undefined);
+    })
+  );
 };
 
 export default defineBackground(() => {
@@ -75,6 +92,52 @@ export default defineBackground(() => {
         ok: true,
         buffered: selectorMissBuffer.length
       });
+    }
+
+    if (typedMessage.type === "flushRanges") {
+      if (typedMessage.kind !== "vod") {
+        if (SHOULD_LOG_FLUSH_DEBUG) {
+          console.warn("[td][background][flush] unsupported-kind", {
+            kind: typedMessage.kind
+          });
+        }
+        return Promise.resolve({ ok: false, reason: "live-not-implemented" });
+      }
+
+      if (SHOULD_LOG_FLUSH_DEBUG) {
+        console.info("[td][background][flush] received", {
+          vodId: typedMessage.vodId,
+          rangeCount: typedMessage.ranges.length
+        });
+      }
+
+      return applyVodFlush(typedMessage)
+        .then(async (record) => {
+          if (SHOULD_LOG_FLUSH_DEBUG) {
+            console.info("[td][background][flush] persisted", {
+              vodId: typedMessage.vodId,
+              rangeCount: record.ranges.length,
+              totalWatchedSeconds: record.totalWatchedSeconds
+            });
+          }
+
+          const payload: Extract<Msg, { type: "vodRecordChanged" }> = {
+            type: "vodRecordChanged",
+            vodId: typedMessage.vodId,
+            record
+          };
+          await broadcastVodRecordChanged(payload);
+          return { ok: true };
+        })
+        .catch((error: unknown) => {
+          if (SHOULD_LOG_FLUSH_DEBUG) {
+            console.error("[td][background][flush] failed", {
+              vodId: typedMessage.vodId,
+              error
+            });
+          }
+          return { ok: false };
+        });
     }
 
     return undefined;

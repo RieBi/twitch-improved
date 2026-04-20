@@ -105,7 +105,7 @@ export const defaultSettings: Settings = {
     indicatorStyle: "both",
     indicatorColor: "#9147ff",
     trackLiveStreams: true,
-    pauseWhenTabUnfocused: true,
+    pauseWhenTabUnfocused: false,
     minWatchSecondsToRecord: 10
   }
 };
