@@ -1,9 +1,14 @@
 import { initDeclutter } from "./declutter";
+import { initStreamMetadata } from "./tracker/streamMetadata";
+import { sendMsg } from "../../lib/messaging";
 
 export default defineContentScript({
   matches: ["https://www.twitch.tv/*"],
   runAt: "document_start",
   async main() {
+    initStreamMetadata();
+    await sendMsg<{ ok: boolean }>({ type: "ensureMetadataBridge" }).catch(() => undefined);
+
     const declutter = await initDeclutter();
 
     const notifyRouteChange = (): void => {

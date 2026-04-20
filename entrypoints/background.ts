@@ -1,4 +1,6 @@
 import browser from "webextension-polyfill";
+import type { Msg } from "../lib/messaging";
+import { installMainWorldMetadataBridge } from "./content/injected/mainWorld";
 
 interface SelectorMissEvent {
   id: string;
@@ -16,27 +18,56 @@ const pushSelectorMiss = (entry: SelectorMissEvent): void => {
   }
 };
 
+const executeMainWorldBridge = async (tabId: number, frameId: number): Promise<void> => {
+  try {
+    await browser.scripting.executeScript({
+      target: { tabId, frameIds: [frameId] },
+      world: "MAIN",
+      func: installMainWorldMetadataBridge
+    });
+    return;
+  } catch {
+    // Firefox support for execution worlds differs; fallback without world.
+  }
+
+  await browser.scripting.executeScript({
+    target: { tabId, frameIds: [frameId] },
+    func: installMainWorldMetadataBridge
+  });
+};
+
 export default defineBackground(() => {
   browser.runtime.onInstalled.addListener(() => {
     console.info("Twitch Improved background ready.");
   });
 
-  browser.runtime.onMessage.addListener((message: unknown) => {
-    if (typeof message === "object" && message !== null && "type" in message && message.type === "settingsChanged") {
+  browser.runtime.onMessage.addListener((message: unknown, sender) => {
+    if (typeof message !== "object" || message === null || !("type" in message)) {
+      return undefined;
+    }
+
+    const typedMessage = message as Msg;
+
+    if (typedMessage.type === "settingsChanged") {
       return Promise.resolve({ ok: true });
     }
 
-    if (
-      typeof message === "object" &&
-      message !== null &&
-      "type" in message &&
-      message.type === "reportSelectorMiss" &&
-      "id" in message &&
-      typeof message.id === "string"
-    ) {
+    if (typedMessage.type === "ensureMetadataBridge") {
+      const tabId = sender.tab?.id;
+      if (tabId === undefined) {
+        return Promise.resolve({ ok: false });
+      }
+
+      const frameId = sender.frameId ?? 0;
+      return executeMainWorldBridge(tabId, frameId)
+        .then(() => ({ ok: true }))
+        .catch(() => ({ ok: false }));
+    }
+
+    if (typedMessage.type === "reportSelectorMiss") {
       pushSelectorMiss({
-        id: message.id,
-        url: "url" in message && typeof message.url === "string" ? message.url : "",
+        id: typedMessage.id,
+        url: typedMessage.url,
         timestamp: Date.now()
       });
 

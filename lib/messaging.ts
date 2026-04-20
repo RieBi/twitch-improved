@@ -16,12 +16,33 @@ export interface LiveMeta {
   streamStartedAt: number;
 }
 
+export type MetadataSource = "apollo" | "fetch";
+
+export interface BridgeStreamMeta extends LiveMeta {
+  streamId: string;
+  source: MetadataSource;
+  observedAt: number;
+}
+
+export interface BridgeVodMeta extends VodMeta {
+  vodId: string;
+  source: MetadataSource;
+  observedAt: number;
+}
+
+export interface BridgeVodTileMeta {
+  source: MetadataSource;
+  observedAt: number;
+  vods: BridgeVodMeta[];
+}
+
 export type Msg =
   | { type: "flushRanges"; kind: "vod"; vodId: string; meta: VodMeta; ranges: Range[] }
   | { type: "flushRanges"; kind: "live"; sessionId: string; meta: LiveMeta; ranges: Range[] }
   | { type: "getVodRecords"; ids: string[] }
   | { type: "toggleMarkedWatched"; vodId: string }
   | { type: "reportSelectorMiss"; id: string; url: string }
+  | { type: "ensureMetadataBridge" }
   | { type: "settingsChanged" }
   | { type: "vodRecordChanged"; vodId: string; record: VodRecord };
 
