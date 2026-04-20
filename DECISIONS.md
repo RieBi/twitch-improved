@@ -17,3 +17,5 @@
 | 12  | Player-bar heatmap                               | §5.8              |
 | 13  | Export / Import / Clear / Diagnostics            | §5.10, §6         |
 | 14  | Manual QA pass                                   | §8                |
+
+

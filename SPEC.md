@@ -11,17 +11,18 @@ Two-part browser extension:
 
 ## 1. Tech stack & tooling
 
-- **Manifest V3**, cross-browser via **[`wxt`](https://wxt.dev)** (handles MV3 quirks, per-browser manifest generation, HMR).
+- **Manifest V3**, cross-browser via `**[wxt](https://wxt.dev)`** (handles MV3 quirks, per-browser manifest generation, HMR).
 - **TypeScript** everywhere.
 - **React** in the options page only.
 - **Vanilla DOM + CSS** for content-script injected UI (heatmap bar, buttons). No framework overhead in the hot path.
-- **`webextension-polyfill`** for `browser.*` in Chrome (wxt wires this up).
+- `**webextension-polyfill`** for `browser.*` in Chrome (wxt wires this up).
 - **Storage:**
   - `browser.storage.sync` — settings only.
-  - **IndexedDB** via [`idb`](https://github.com/jakearchibald/idb) — watch history, live-session records.
-- Testing: **Vitest** + **`fake-indexeddb`**. No E2E in v1.
+  - **IndexedDB** via `[idb](https://github.com/jakearchibald/idb)` — watch history, live-session records.
+- Testing: **Vitest** + `**fake-indexeddb`**. No E2E in v1.
 
 ### Cross-browser notes
+
 MV3 service workers differ slightly between Chrome (true SW, short-lived) and Firefox (event page with longer lifetime). `wxt` + `idb` (which reopens lazily) handle both. Cost of Firefox support is negligible.
 
 ---
@@ -125,6 +126,7 @@ Settings have a central `defaultSettings` const and a `migrateSettings(old, vers
 ### 3.2 IndexedDB (`twitch-decluttered`, v1)
 
 **Store `vods`** — keyed by `vodId`.
+
 ```ts
 interface VodRecord {
   vodId: string;                  // Twitch video ID, e.g. "1234567890"
@@ -140,6 +142,7 @@ interface VodRecord {
 ```
 
 **Store `liveSessions`** — keyed by `sessionId` = `${channelId}:${streamStartedAt}`.
+
 ```ts
 interface LiveSessionRecord {
   sessionId: string;
@@ -155,6 +158,7 @@ interface LiveSessionRecord {
 **Store `channels`** — keyed by `channelId`, lightweight metadata cache (login, displayName, lastSeen).
 
 **Indexes:**
+
 - `vods.by_channel` on `channelId`
 - `vods.by_lastUpdated` on `lastUpdated` (GC)
 - `liveSessions.by_channel_startedAt` compound `[channelId, streamStartedAt]` (VOD linking)
@@ -185,28 +189,33 @@ interface DeclutterRule {
 
 Twitch ships hashed CSS classes; **prefer `data-a-target` and `data-test-selector`**, fall back to ARIA role + heading text matching with `:has()`. Never use hashed class names.
 
-| Setting | Starting selector |
-|---|---|
-| Main carousel | `[data-a-target="front-page-carousel"]` |
-| "Live channels we think you'll like" | section containing `h2` with matching text; attribute probably `data-target="directory-first-rec-shelf"` |
-| Mobile Games shelf | section whose heading text matches `/^Mobile Games$/` |
-| Recommended Categories (main) | section whose heading text matches `/^Recommended Categories$/` |
-| Categories "we think you'll like" | section whose heading text matches `/Categories.*you'?ll like/i` |
-| Offline preview on channel page | `[data-test-selector="video-player__video-layout-offline"]`; also the recommendation-banner variant seen in screenshot 2 |
-| Sidebar recommended channels | `nav` section with heading `Live Channels` or aria-label `Recommended Channels` |
-| Sidebar recommended categories | nav section with heading `Recommended Categories` |
-| "Viewers also watch" (channel sidebar) | section with heading `Viewers Also Watch` |
-| Get Ad-Free button | `button[aria-label*="Ad-Free" i]` |
+
+| Setting                                | Starting selector                                                                                                        |
+| -------------------------------------- | ------------------------------------------------------------------------------------------------------------------------ |
+| Main carousel                          | `[data-a-target="front-page-carousel"]`                                                                                  |
+| "Live channels we think you'll like"   | section containing `h2` with matching text; attribute probably `data-target="directory-first-rec-shelf"`                 |
+| Mobile Games shelf                     | section whose heading text matches `/^Mobile Games$/`                                                                    |
+| Recommended Categories (main)          | section whose heading text matches `/^Recommended Categories$/`                                                          |
+| Categories "we think you'll like"      | section whose heading text matches `/Categories.*you'?ll like/i`                                                         |
+| Offline preview on channel page        | `[data-test-selector="video-player__video-layout-offline"]`; also the recommendation-banner variant seen in screenshot 2 |
+| Sidebar recommended channels           | `nav` section with heading `Live Channels` or aria-label `Recommended Channels`                                          |
+| Sidebar recommended categories         | nav section with heading `Recommended Categories`                                                                        |
+| "Viewers also watch" (channel sidebar) | section with heading `Viewers Also Watch`                                                                                |
+| Get Ad-Free button                     | `button[aria-label*="Ad-Free" i]`                                                                                        |
+
 
 For heading-based matches where a stable attribute is missing, CSS4 `:has()` works in all modern Chromium and Firefox releases:
+
 ```css
 section:has(> h2[data-testid="card-heading"]:first-of-type:--matches-text("Mobile Games")) { display: none; }
 ```
+
 `:--matches-text` isn't native — use a tiny JS pass instead: on each MutationObserver tick, walk candidate sections and add a `data-td-hide="mobile-games"` attribute; CSS hides by that attribute. This keeps the fast path CSS-only while letting JS do text matching where needed.
 
 ### 4.4 Selector resilience
 
 `lib/selectors.ts` holds one entry per target:
+
 ```ts
 interface SelectorDef {
   id: string;
@@ -215,6 +224,7 @@ interface SelectorDef {
   health: 'required' | 'optional';
 }
 ```
+
 A 30-second watchdog verifies the `primary` element exists on the relevant page. Misses are reported via `runtime.sendMessage` to background, buffered in a ring buffer (last 100), surfaced in **Options → Diagnostics**. This is the single most important defense against Twitch markup churn.
 
 ---
@@ -225,14 +235,16 @@ A 30-second watchdog verifies the `primary` element exists on the relevant page.
 
 `content/index.ts` listens to `popstate` and patches `history.pushState`/`replaceState` (Twitch's SPA router) to re-detect on every navigation. URL → mode:
 
-| URL pattern | Mode |
-|---|---|
-| `/videos/{id}` | VOD player — start `vodTracker` + render player-bar heatmap |
-| `/{login}` (live) | Live channel — start `liveTracker` |
-| `/{login}` (offline) | render tile heatmaps on "Recent broadcasts" |
-| `/{login}/videos` | render tile heatmaps on VOD grid |
-| `/directory/...` | render tile heatmaps on any VOD tiles present |
-| `/search` | render tile heatmaps |
+
+| URL pattern          | Mode                                                        |
+| -------------------- | ----------------------------------------------------------- |
+| `/videos/{id}`       | VOD player — start `vodTracker` + render player-bar heatmap |
+| `/{login}` (live)    | Live channel — start `liveTracker`                          |
+| `/{login}` (offline) | render tile heatmaps on "Recent broadcasts"                 |
+| `/{login}/videos`    | render tile heatmaps on VOD grid                            |
+| `/directory/...`     | render tile heatmaps on any VOD tiles present               |
+| `/search`            | render tile heatmaps                                        |
+
 
 Reserved words (`directory`, `videos`, `search`, `settings`, etc.) excluded from the `/{login}` match.
 
@@ -242,13 +254,13 @@ Reserved words (`directory`, `videos`, `search`, `settings`, etc.) excluded from
 2. Read VOD metadata (duration, channel, `createdAt`) from Apollo cache (see §5.5).
 3. Locate `<video>` via `playerProbe` with MutationObserver retry (Twitch lazy-loads).
 4. Sampler @ 1 Hz. Each tick, skip if:
-   - `video.paused || video.ended || video.readyState < 3`, or
-   - `settings.pauseWhenTabUnfocused && document.hidden`.
+  - `video.paused || video.ended || video.readyState < 3`, or
+  - `settings.pauseWhenTabUnfocused && document.hidden`.
    Otherwise emit sample `{ wallClockMs, currentTime }`.
 5. `segmentBuffer` folds samples into ranges:
-   - Consecutive samples where `|Δ currentTime − Δ wallClock / 1000| < 0.5 s` extend the current range.
-   - Discontinuities (seek, rewind) close the range and open a new one.
-   - Range endpoints quantized to `bucketSeconds` at flush time (not at sample time).
+  - Consecutive samples where `|Δ currentTime − Δ wallClock / 1000| < 0.5 s` extend the current range.
+  - Discontinuities (seek, rewind) close the range and open a new one.
+  - Range endpoints quantized to `bucketSeconds` at flush time (not at sample time).
 6. **Flush** every 10 s, on `visibilitychange=hidden`, and on `beforeunload`. Flushing sends `{ type: 'flushRanges', kind: 'vod', vodId, ranges }` to background. Background merges into stored `ranges` via `ranges.merge`, recomputes `totalWatchedSeconds`, writes, and broadcasts `vodRecordChanged`.
 7. MV3 note: never rely on `pagehide` for async work. Use `visibilitychange=hidden` as the primary flush trigger; unload is best-effort.
 
@@ -259,18 +271,19 @@ Reserved words (`directory`, `videos`, `search`, `settings`, etc.) excluded from
 **Solution:** record everything as **seconds since stream start**. Match to VOD when it appears.
 
 1. On live channel page load, extract from Apollo cache: `stream.id`, `stream.createdAt` (→ `streamStartedAt` epoch ms), `channel.id`, `channel.login`.
-2. `sessionId = \`${channelId}:${streamStartedAt}\``.
+2. `sessionId = \`${channelId}:${streamStartedAt}`.
 3. Sampler @ 1 Hz. For each tick, compute stream-relative position:
-   ```
+  ```
    liveEdgeSec   = (Date.now() - streamStartedAt) / 1000
    rewindOffset  = video.seekable.length > 0
                      ? video.seekable.end(0) - video.currentTime
                      : 0
    streamPosSec  = liveEdgeSec - rewindOffset
-   ```
+  ```
 4. Feed into `segmentBuffer` as if stream-position were the timeline. Flush into `liveSessions` store.
 
 **Edge cases:**
+
 - **Stream restart within same URL visit:** `streamStartedAt` changes → new `sessionId`. Detect on next metadata sample; start a fresh session.
 - **Clock skew:** bounded by the `±10 min` VOD-matching tolerance, so ±few seconds is irrelevant.
 - **DVR buffer rollover on very long streams:** irrelevant — math uses only `seekable.end(0) - currentTime`.
@@ -281,11 +294,12 @@ Reserved words (`directory`, `videos`, `search`, `settings`, etc.) excluded from
 Two triggers:
 
 **(a) When a `VodRecord` is created/updated:**
+
 1. Query `liveSessions.by_channel_startedAt` for same `channelId` with `|streamStartedAt − vod.createdAt| < 10 min` and `linkedVodId == null`.
 2. For each match:
-   - `offset = (streamStartedAt − vod.createdAt) / 1000` (usually ≈ 0, sometimes small positive).
-   - Translate `liveSession.ranges` by `offset` → VOD seconds. Clamp to `[0, durationSeconds]`.
-   - Merge into `vod.ranges`; set `liveSession.linkedVodId = vod.vodId`.
+  - `offset = (streamStartedAt − vod.createdAt) / 1000` (usually ≈ 0, sometimes small positive).
+  - Translate `liveSession.ranges` by `offset` → VOD seconds. Clamp to `[0, durationSeconds]`.
+  - Merge into `vod.ranges`; set `liveSession.linkedVodId = vod.vodId`.
 
 **(b) Periodic background sweep (once/hour):**
 Scan unlinked sessions older than 30 min against known VODs. Catches the case where the user never revisits the channel after the VOD appears.
@@ -297,6 +311,7 @@ Tolerance of 10 min is deliberately loose — Twitch's `vod.createdAt` is usuall
 `window.__APOLLO_CLIENT__` lives in the page's main world; content-script isolated world can't see it directly.
 
 **Bridge:**
+
 - `mainWorld.ts` injected via `scripting.executeScript({ world: 'MAIN' })` (Chrome) / equivalent Firefox path.
 - It reads `__APOLLO_CLIENT__.cache.extract()` and also hooks `fetch` to capture Twitch GQL responses (operation names: `UseLive`, `VideoMetadata`, `ChannelRoot_Channel`, `FilterableVideoTower_Videos`).
 - Communicates with isolated world via `CustomEvent`s (`td:stream-meta`, `td:vod-meta`, `td:vod-tile-meta`).
@@ -308,6 +323,7 @@ Tolerance of 10 min is deliberately loose — Twitch's `vod.createdAt` is usuall
 ### 5.6 Ranges utility (`lib/util/ranges.ts`)
 
 Pure, unit-tested:
+
 ```ts
 type Range = [number, number];  // [start, end), seconds
 
@@ -318,6 +334,7 @@ function quantize(ranges: Range[], bucketSec: number): Range[];
 function offset(ranges: Range[], deltaSec: number): Range[];
 function clamp(ranges: Range[], min: number, max: number): Range[];
 ```
+
 Standard sweep-line merge. Quantization done at store time to cap storage cost.
 
 **Storage cost estimate:** an 8-hour VOD watched in 5 s buckets with 20 viewing sessions → worst case ~5760 range entries, but merging collapses them to ≲ 100 real ranges. Each range is ~24 bytes in IDB → ≲ 3 KB per VOD. Negligible.
@@ -325,14 +342,17 @@ Standard sweep-line merge. Quantization done at store time to cap storage cost.
 ### 5.7 Tile heatmap rendering (`heatmap/tileRenderer.ts`)
 
 **Detection:**
+
 - MutationObserver on Twitch's main content root (not `document.body` — too noisy).
 - Per candidate added node, find descendant `a[href^="/videos/"]`. Extract vodId from href.
 - Dedupe: each tile tagged with `data-td-processed="{vodId}@{lastUpdated}"`; skip if unchanged.
 
 **Batch lookup:**
+
 - Content script accumulates new vodIds for 50 ms, then sends `getVodRecords({ ids })` to background in one batch. Background responds with a map. This avoids N concurrent IDB transactions.
 
 **Render per tile:**
+
 - Inject `<div class="td-heatmap">` absolutely positioned at bottom of thumbnail image (not the tile container — avoids layout shift).
 - One child `<div class="td-heatmap-seg">` per range; `left` and `width` as percentages of `durationSeconds`.
 - If `durationSeconds` unknown, parse the tile's own `HH:MM:SS` badge (top-left of thumbnail) as fallback and cache back into the record.
@@ -451,15 +471,17 @@ A `sendMsg<T>(msg): Promise<Response<T>>` helper with exhaustive handling on the
 
 ## 11. Known risks
 
-| Risk | Mitigation |
-|---|---|
-| Apollo cache shape change | Fallback via `fetch` hook in main world. |
-| Twitch markup churn (selectors) | Attribute-first selectors; Diagnostics panel surfaces misses. |
-| MV3 service worker eviction loses in-flight flushes | Flushes are fire-and-forget; background re-opens IDB on demand via `idb`. Client retries on message failure. |
-| Clock skew in live→VOD mapping | 10-min match tolerance; quantization to 5 s buckets; realistic skew is < 1 s. |
-| Virtualized tile scrollers | MutationObserver attached to the specific scroller root, not `document.body`. |
-| Fullscreen player reparents DOM | ResizeObserver + re-attach on `fullscreenchange`. |
-| `:has()` support regressions | Required for text-match declutter; minimum browser versions documented in README (Chrome 105+, Firefox 121+). |
+
+| Risk                                                | Mitigation                                                                                                    |
+| --------------------------------------------------- | ------------------------------------------------------------------------------------------------------------- |
+| Apollo cache shape change                           | Fallback via `fetch` hook in main world.                                                                      |
+| Twitch markup churn (selectors)                     | Attribute-first selectors; Diagnostics panel surfaces misses.                                                 |
+| MV3 service worker eviction loses in-flight flushes | Flushes are fire-and-forget; background re-opens IDB on demand via `idb`. Client retries on message failure.  |
+| Clock skew in live→VOD mapping                      | 10-min match tolerance; quantization to 5 s buckets; realistic skew is < 1 s.                                 |
+| Virtualized tile scrollers                          | MutationObserver attached to the specific scroller root, not `document.body`.                                 |
+| Fullscreen player reparents DOM                     | ResizeObserver + re-attach on `fullscreenchange`.                                                             |
+| `:has()` support regressions                        | Required for text-match declutter; minimum browser versions documented in README (Chrome 105+, Firefox 121+). |
+
 
 ---
 
@@ -479,3 +501,4 @@ A `sendMsg<T>(msg): Promise<Response<T>>` helper with exhaustive handling on the
 12. Player-bar heatmap.
 13. Export / Import / Clear / Diagnostics.
 14. Manual QA pass; fix selectors.
+
