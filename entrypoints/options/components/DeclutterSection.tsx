@@ -44,45 +44,12 @@ export function DeclutterSection({ value, onChange }: DeclutterSectionProps) {
         />
         <ToggleField
           id="hideRecommendedStreams"
-          label="Hide recommended streams shelf"
+          label="Hide everything below top carousel"
           checked={value.mainFeed.hideRecommendedStreams}
           onChange={(checked) =>
             onChange({
               ...value,
               mainFeed: { ...value.mainFeed, hideRecommendedStreams: checked }
-            })
-          }
-        />
-        <ToggleField
-          id="hideMobileGames"
-          label="Hide Mobile Games shelf"
-          checked={value.mainFeed.hideMobileGames}
-          onChange={(checked) =>
-            onChange({
-              ...value,
-              mainFeed: { ...value.mainFeed, hideMobileGames: checked }
-            })
-          }
-        />
-        <ToggleField
-          id="hideMainRecommendedCategories"
-          label="Hide main-page recommended categories"
-          checked={value.mainFeed.hideRecommendedCategories}
-          onChange={(checked) =>
-            onChange({
-              ...value,
-              mainFeed: { ...value.mainFeed, hideRecommendedCategories: checked }
-            })
-          }
-        />
-        <ToggleField
-          id="hideCategoriesYoullLike"
-          label="Hide categories we think you'll like"
-          checked={value.mainFeed.hideCategoriesYoullLike}
-          onChange={(checked) =>
-            onChange({
-              ...value,
-              mainFeed: { ...value.mainFeed, hideCategoriesYoullLike: checked }
             })
           }
         />

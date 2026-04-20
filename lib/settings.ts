@@ -51,6 +51,25 @@ interface BrowserLike {
   };
 }
 
+interface CallbackStorageArea {
+  get(
+    keys: string | string[] | null | undefined,
+    callback: (items: Record<string, unknown>) => void
+  ): void;
+  set(items: Record<string, unknown>, callback?: () => void): void;
+}
+
+interface ChromeLike {
+  runtime?: {
+    lastError?: {
+      message?: string;
+    };
+  };
+  storage?: {
+    sync?: CallbackStorageArea;
+  };
+}
+
 const STORAGE_KEY = "settings";
 export const SETTINGS_VERSION = 1;
 const ALLOWED_BUCKET_SECONDS = new Set([1, 5, 10, 30]);
@@ -93,12 +112,43 @@ export const defaultSettings: Settings = {
 
 const getDefaultStorageArea = (): SettingsStorageArea => {
   const browserLike = globalThis as typeof globalThis & { browser?: BrowserLike };
-  const storage = browserLike.browser?.storage?.sync;
-  if (!storage) {
-    throw new Error("browser.storage.sync is not available in this runtime.");
+  const browserStorage = browserLike.browser?.storage?.sync;
+  if (browserStorage) {
+    return browserStorage;
   }
 
-  return storage;
+  const chromeLike = globalThis as typeof globalThis & { chrome?: ChromeLike };
+  const chromeStorage = chromeLike.chrome?.storage?.sync;
+  if (chromeStorage) {
+    return {
+      get: (keys) =>
+        new Promise((resolve, reject) => {
+          chromeStorage.get(keys, (items) => {
+            const error = chromeLike.chrome?.runtime?.lastError;
+            if (error) {
+              reject(new Error(error.message ?? "chrome.storage.sync.get failed."));
+              return;
+            }
+
+            resolve(items);
+          });
+        }),
+      set: (items) =>
+        new Promise((resolve, reject) => {
+          chromeStorage.set(items, () => {
+            const error = chromeLike.chrome?.runtime?.lastError;
+            if (error) {
+              reject(new Error(error.message ?? "chrome.storage.sync.set failed."));
+              return;
+            }
+
+            resolve();
+          });
+        })
+    };
+  }
+
+  throw new Error("Extension storage.sync is not available in this runtime.");
 };
 
 const isObject = (value: unknown): value is Record<string, unknown> =>

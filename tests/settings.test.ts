@@ -114,4 +114,66 @@ describe("settings storage adapter", () => {
     expect(updated.declutter.channel.hideOfflinePreview).toBe(true);
     expect((await loadSettings(storage)).declutter.channel.hideOfflinePreview).toBe(true);
   });
+
+  it("supports chrome callback storage when browser storage is unavailable", async () => {
+    const storageData = new Map<string, unknown>();
+    const previousChrome = (globalThis as typeof globalThis & { chrome?: unknown }).chrome;
+    const previousBrowser = (globalThis as typeof globalThis & { browser?: unknown }).browser;
+
+    delete (globalThis as typeof globalThis & { browser?: unknown }).browser;
+    (globalThis as typeof globalThis & { chrome?: unknown }).chrome = {
+      runtime: {},
+      storage: {
+        sync: {
+          get(keys: string | string[] | null | undefined, callback: (items: Record<string, unknown>) => void) {
+            if (typeof keys === "string") {
+              callback({ [keys]: storageData.get(keys) });
+              return;
+            }
+
+            if (Array.isArray(keys)) {
+              callback(Object.fromEntries(keys.map((key) => [key, storageData.get(key)])));
+              return;
+            }
+
+            callback(Object.fromEntries(storageData.entries()));
+          },
+          set(items: Record<string, unknown>, callback?: () => void) {
+            for (const [key, value] of Object.entries(items)) {
+              storageData.set(key, value);
+            }
+            callback?.();
+          }
+        }
+      }
+    };
+
+    try {
+      const next = {
+        ...defaultSettings,
+        declutter: {
+          ...defaultSettings.declutter,
+          global: {
+            hideGetAdFreeButton: true
+          }
+        }
+      };
+
+      await saveSettings(next);
+      const loaded = await loadSettings();
+      expect(loaded.declutter.global.hideGetAdFreeButton).toBe(true);
+    } finally {
+      if (previousBrowser === undefined) {
+        delete (globalThis as typeof globalThis & { browser?: unknown }).browser;
+      } else {
+        (globalThis as typeof globalThis & { browser?: unknown }).browser = previousBrowser;
+      }
+
+      if (previousChrome === undefined) {
+        delete (globalThis as typeof globalThis & { chrome?: unknown }).chrome;
+      } else {
+        (globalThis as typeof globalThis & { chrome?: unknown }).chrome = previousChrome;
+      }
+    }
+  });
 });
