@@ -1,0 +1,5 @@
+---
+alwaysApply: true
+---
+
+Before implementing anything, read SPEC.md §X where X matches the current task. Treat §1–§4 (stack, layout, data model) as binding. Don't invent Twitch DOM selectors — ask me or leave a TODO(selector) and I'll fill it in from DevTools.
