@@ -1,0 +1,35 @@
+{
+  "name": "twitch-improved",
+  "version": "1.0.0",
+  "description": "Twitch Declutter & Watch Heatmap extension",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "wxt",
+    "build": "wxt build --browser chrome --mv3 && wxt build --browser firefox --mv3",
+    "test": "vitest run"
+  },
+  "keywords": [
+    "browser-extension",
+    "twitch",
+    "wxt"
+  ],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "idb": "^8.0.3",
+    "react": "^19.2.5",
+    "react-dom": "^19.2.5",
+    "webextension-polyfill": "^0.12.0"
+  },
+  "devDependencies": {
+    "@types/node": "^25.6.0",
+    "@types/react": "^19.2.14",
+    "@types/react-dom": "^19.2.3",
+    "@wxt-dev/module-react": "^1.2.2",
+    "fake-indexeddb": "^6.2.5",
+    "typescript": "^6.0.3",
+    "vitest": "^4.1.4",
+    "wxt": "^0.20.25"
+  }
+}
