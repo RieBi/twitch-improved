@@ -70,3 +70,17 @@ export async function getChannel(channelId: string): Promise<ChannelRecord | und
   const db = await withDb();
   return db.get("channels", channelId);
 }
+
+export async function commitVodLinkingTransaction(
+  vod: VodRecord,
+  liveSessions: LiveSessionRecord[]
+): Promise<void> {
+  const db = await withDb();
+  const tx = db.transaction(["vods", "liveSessions"], "readwrite");
+  await tx.objectStore("vods").put(vod);
+  const liveStore = tx.objectStore("liveSessions");
+  for (const session of liveSessions) {
+    await liveStore.put(session);
+  }
+  await tx.done;
+}

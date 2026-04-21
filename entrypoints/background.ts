@@ -1,6 +1,7 @@
 import browser from "webextension-polyfill";
 import type { Msg } from "../lib/messaging";
 import { getVodsByIds } from "../lib/db/repo";
+import { linkEligibleLiveSessionsToVod, runUnlinkedLiveSessionSweep } from "../lib/liveVodLinking";
 import { applyLiveFlush } from "../lib/liveFlush";
 import { applyVodFlush } from "../lib/vodFlush";
 import { installMainWorldMetadataBridge } from "./content/injected/mainWorld";
@@ -14,6 +15,8 @@ interface SelectorMissEvent {
 const MAX_SELECTOR_MISSES = 100;
 const selectorMissBuffer: SelectorMissEvent[] = [];
 const SHOULD_LOG_FLUSH_DEBUG = import.meta.env.DEV;
+
+const LINK_SWEEP_ALARM = "td-live-vod-link-sweep";
 
 const pushSelectorMiss = (entry: SelectorMissEvent): void => {
   selectorMissBuffer.push(entry);
@@ -55,9 +58,39 @@ const broadcastVodRecordChanged = async (
   );
 };
 
+const ensureLinkSweepAlarm = async (): Promise<void> => {
+  const existing = await browser.alarms.get(LINK_SWEEP_ALARM);
+  if (existing) {
+    return;
+  }
+
+  await browser.alarms.create(LINK_SWEEP_ALARM, { periodInMinutes: 60 });
+};
+
 export default defineBackground(() => {
+  void ensureLinkSweepAlarm();
+
   browser.runtime.onInstalled.addListener(() => {
     console.info("Twitch Improved background ready.");
+    void ensureLinkSweepAlarm();
+  });
+
+  browser.alarms.onAlarm.addListener((alarm) => {
+    if (alarm.name !== LINK_SWEEP_ALARM) {
+      return;
+    }
+
+    void runUnlinkedLiveSessionSweep()
+      .then(async (records) => {
+        for (const record of records) {
+          await broadcastVodRecordChanged({
+            type: "vodRecordChanged",
+            vodId: record.vodId,
+            record
+          });
+        }
+      })
+      .catch(() => undefined);
   });
 
   browser.runtime.onMessage.addListener((message: unknown, sender) => {
@@ -154,10 +187,12 @@ export default defineBackground(() => {
             });
           }
 
+          const linked = await linkEligibleLiveSessionsToVod(record);
+
           const payload: Extract<Msg, { type: "vodRecordChanged" }> = {
             type: "vodRecordChanged",
             vodId: typedMessage.vodId,
-            record
+            record: linked
           };
           await broadcastVodRecordChanged(payload);
           return { ok: true };

@@ -9,7 +9,7 @@ export default defineConfig({
   manifest: {
     name: "Twitch Improved",
     description: "Declutter Twitch and show watch heatmaps for VODs.",
-    permissions: ["storage", "scripting"],
+    permissions: ["storage", "scripting", "alarms"],
     host_permissions: ["https://www.twitch.tv/*"]
   }
 });
