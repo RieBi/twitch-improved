@@ -1,0 +1,60 @@
+.td-heatmap-host {
+  position: relative !important;
+}
+
+.td-heatmap {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 6px;
+  pointer-events: none;
+  z-index: 9999;
+}
+
+.td-heatmap-seg {
+  position: absolute;
+  top: 0;
+  height: 100%;
+  background-color: var(--td-indicator-color, #9147ff);
+  opacity: 1;
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.25);
+}
+
+.td-watched-border {
+  box-shadow: inset 0 0 0 2px var(--td-indicator-color, #9147ff);
+}
+
+.td-watched-chip {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  z-index: 10000;
+  color: #fff;
+  font-size: 10px;
+  line-height: 1;
+  font-weight: 600;
+  padding: 3px 6px;
+  border-radius: 999px;
+  pointer-events: none;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.45);
+}
+
+.td-watched-grayout {
+  filter: grayscale(0.7) brightness(0.6);
+}
+
+.td-heatmap-debug-badge {
+  position: absolute;
+  top: 4px;
+  left: 4px;
+  z-index: 10000;
+  padding: 2px 4px;
+  border-radius: 3px;
+  font-size: 10px;
+  line-height: 1;
+  color: #fff;
+  background: rgba(0, 0, 0, 0.75);
+  pointer-events: none;
+  font-family: Inter, "Helvetica Neue", Arial, sans-serif;
+}

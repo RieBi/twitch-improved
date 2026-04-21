@@ -1,4 +1,4 @@
-import type { IndicatorStyle, Settings } from "../../../lib/settings";
+import type { Settings } from "../../../lib/settings";
 
 interface HeatmapSectionProps {
   value: Settings["heatmap"];
@@ -26,8 +26,6 @@ function ToggleField({ id, label, checked, onChange }: ToggleFieldProps) {
     </label>
   );
 }
-
-const indicatorStyles: IndicatorStyle[] = ["both", "grayout", "border"];
 
 export function HeatmapSection({ value, onChange, title = "Watch heatmap" }: HeatmapSectionProps) {
   return (
@@ -82,28 +80,9 @@ export function HeatmapSection({ value, onChange, title = "Watch heatmap" }: Hea
 
       <div className="field-group">
         <h3>Indicator</h3>
-        <fieldset className="field">
-          <legend>Indicator style</legend>
-          <div className="radio-group">
-            {indicatorStyles.map((style) => (
-              <label key={style} className="radio-option">
-                <input
-                  type="radio"
-                  name="indicatorStyle"
-                  value={style}
-                  checked={value.indicatorStyle === style}
-                  onChange={(event) =>
-                    onChange({
-                      ...value,
-                      indicatorStyle: event.target.value as IndicatorStyle
-                    })
-                  }
-                />
-                <span>{style}</span>
-              </label>
-            ))}
-          </div>
-        </fieldset>
+        <p className="panel-description">
+          Watched tiles are currently shown with a "Watched" badge (plus border when enabled).
+        </p>
 
         <label className="field" htmlFor="indicatorColor">
           <span>Indicator color</span>
@@ -123,6 +102,12 @@ export function HeatmapSection({ value, onChange, title = "Watch heatmap" }: Hea
           label="Show heatmap on VOD tiles"
           checked={value.showOnTiles}
           onChange={(checked) => onChange({ ...value, showOnTiles: checked })}
+        />
+        <ToggleField
+          id="hideNativeTileProgressBar"
+          label="Hide Twitch default tile progress bar"
+          checked={value.hideNativeTileProgressBar}
+          onChange={(checked) => onChange({ ...value, hideNativeTileProgressBar: checked })}
         />
         <ToggleField
           id="showOnPlayerBar"

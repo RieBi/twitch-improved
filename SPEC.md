@@ -95,7 +95,7 @@ interface Settings {
       hideCategoriesYoullLike: boolean;   // "Categories we think you'll like"
     };
     channel: {
-      hideOfflinePreview: boolean;        // "Check out this Valheim stream from X hours ago"
+      hideOfflinePreview: boolean;        // hide offline preview recommendation on channel pages (home/about/schedule/videos)
       hideViewersAlsoWatch: boolean;      // sidebar "Viewers also watch"
     };
     sidebar: {
@@ -111,8 +111,9 @@ interface Settings {
     bucketSeconds: number;                // default 5
     watchedThresholdPct: number;          // default 85
     showOnTiles: boolean;                 // default true
+    hideNativeTileProgressBar: boolean;   // default false; hide Twitch's white progress strip on tiles
     showOnPlayerBar: boolean;             // default true
-    indicatorStyle: 'grayout' | 'border' | 'both';  // default 'both'
+    indicatorStyle: 'border';             // currently badge + optional border only (no grayout mode)
     indicatorColor: string;               // default '#9147ff'
     trackLiveStreams: boolean;            // default true
     pauseWhenTabUnfocused: boolean;       // default true
@@ -197,7 +198,7 @@ Twitch ships hashed CSS classes; **prefer `data-a-target` and `data-test-selecto
 | Mobile Games shelf                     | section whose heading text matches `/^Mobile Games$/`                                                                    |
 | Recommended Categories (main)          | section whose heading text matches `/^Recommended Categories$/`                                                          |
 | Categories "we think you'll like"      | section whose heading text matches `/Categories.*you'?ll like/i`                                                         |
-| Offline preview on channel page        | `[data-test-selector="video-player__video-layout-offline"]`; also the recommendation-banner variant seen in screenshot 2 |
+| Offline preview on channel pages       | `[data-test-selector="video-player__video-layout-offline"]`; also the recommendation-banner variant seen in screenshot 2 |
 | Sidebar recommended channels           | `nav` section with heading `Live Channels` or aria-label `Recommended Channels`                                          |
 | Sidebar recommended categories         | nav section with heading `Recommended Categories`                                                                        |
 | "Viewers also watch" (channel sidebar) | section with heading `Viewers Also Watch`                                                                                |
@@ -357,9 +358,9 @@ Standard sweep-line merge. Quantization done at store time to cap storage cost.
 - One child `<div class="td-heatmap-seg">` per range; `left` and `width` as percentages of `durationSeconds`.
 - If `durationSeconds` unknown, parse the tile's own `HH:MM:SS` badge (top-left of thumbnail) as fallback and cache back into the record.
 - If `markedWatched || coveragePct >= threshold`:
-  - `grayout`: add class setting `filter: grayscale(0.7) brightness(0.6)` on thumbnail img.
-  - `border`: `box-shadow: inset 0 0 0 2px var(--td-indicator-color)` on thumbnail wrapper.
-  - `both`: both.
+  - add a `Watched` badge on the tile thumbnail.
+  - optional border highlight uses `box-shadow: inset 0 0 0 2px var(--td-indicator-color)` on thumbnail wrapper.
+- Optional setting can hide Twitch's native white tile progress strip; when enabled, the custom heatmap sits at the very bottom.
 
 **Live updates:** on `vodRecordChanged` broadcast, find the matching tile by `data-td-processed` prefix and re-render just that one.
 
@@ -399,7 +400,7 @@ Single-page React app, dark theme by default, styled to sit comfortably alongsid
 Three sections:
 
 1. **Declutter** — grouped checkboxes mirroring `Settings.declutter`. Each has a `(?)` tooltip showing an example of what disappears.
-2. **Watch heatmap** — enable toggle, threshold slider (50–100 %), bucket seconds (1/5/10/30), indicator style radio, color picker, toggles for tile/player-bar display, live-tracking toggle, unfocused-pause toggle, min-seconds-to-record input.
+2. **Watch heatmap** — enable toggle, threshold slider (50–100 %), bucket seconds (1/5/10/30), color picker, toggles for tile/player-bar display, native-progress-bar hiding toggle, live-tracking toggle, unfocused-pause toggle, min-seconds-to-record input.
 3. **Data** — storage usage readout (`navigator.storage.estimate()`), Clear all (with confirm), Export / Import JSON, **Diagnostics** panel (selector health + recent errors).
 
 Settings persist to `storage.sync`; content scripts subscribe via `storage.onChanged` and apply live without page reload.

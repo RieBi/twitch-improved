@@ -32,7 +32,12 @@ export const selectors: Record<SelectorId, SelectorDef> = {
   channelOfflinePreview: {
     id: "channelOfflinePreview",
     primary: '[class~="persistent-player"]:has([data-a-player-type="channel_home_carousel"])',
-    fallbacks: ['[data-a-player-type="channel_home_carousel"]', '[class~="home-carousel-info"]'],
+    fallbacks: [
+      '[data-a-target="home-offline-carousel"]',
+      '[data-a-player-type="channel_home_carousel"]',
+      '[class~="home-video__wrapper"]',
+      '[class~="home-carousel-info"]'
+    ],
     health: "required"
   },
   channelViewersAlsoWatch: {

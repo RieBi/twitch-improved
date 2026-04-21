@@ -46,6 +46,10 @@ export type Msg =
   | { type: "settingsChanged" }
   | { type: "vodRecordChanged"; vodId: string; record: VodRecord };
 
+export interface GetVodRecordsResponse {
+  records: Record<string, VodRecord | null>;
+}
+
 export async function sendMsg<T>(msg: Msg): Promise<T> {
   return browser.runtime.sendMessage(msg) as Promise<T>;
 }

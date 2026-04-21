@@ -1,12 +1,13 @@
 import type { Settings } from "../../../lib/settings";
 import { getSelector, type SelectorDef, type SelectorId } from "../../../lib/selectors";
-import { isChannelOrVodPagePath, isChannelPagePath, isMainFeedPath } from "./routeMatch";
+import { isChannelScopedPath, isMainFeedPath, isVodPagePath } from "./routeMatch";
 
 const allPages = (): boolean => true;
 
 const mainFeedOnly = (url: URL): boolean => isMainFeedPath(url.pathname);
-const channelPageOnly = (url: URL): boolean => isChannelPagePath(url.pathname);
-const channelOrVodPageOnly = (url: URL): boolean => isChannelOrVodPagePath(url.pathname);
+const channelScopedOnly = (url: URL): boolean => isChannelScopedPath(url.pathname);
+const channelScopedOrVodOnly = (url: URL): boolean =>
+  isChannelScopedPath(url.pathname) || isVodPagePath(url.pathname);
 
 export interface DeclutterRule {
   id: SelectorId;
@@ -29,10 +30,10 @@ const makeRule = (
 export const declutterRules: DeclutterRule[] = [
   makeRule("mainCarousel", mainFeedOnly, (settings) => settings.declutter.mainFeed.hideCarousel),
   makeRule("mainRecommendedStreams", mainFeedOnly, (settings) => settings.declutter.mainFeed.hideRecommendedStreams),
-  makeRule("channelOfflinePreview", channelPageOnly, (settings) => settings.declutter.channel.hideOfflinePreview),
+  makeRule("channelOfflinePreview", channelScopedOnly, (settings) => settings.declutter.channel.hideOfflinePreview),
   makeRule(
     "channelViewersAlsoWatch",
-    channelOrVodPageOnly,
+    channelScopedOrVodOnly,
     (settings) => settings.declutter.channel.hideViewersAlsoWatch
   ),
   makeRule(

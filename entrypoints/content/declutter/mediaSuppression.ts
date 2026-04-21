@@ -1,11 +1,11 @@
 import type { Settings } from "../../../lib/settings";
-import { isChannelPagePath, isMainFeedPath } from "./routeMatch";
+import { isChannelScopedPath, isMainFeedPath } from "./routeMatch";
 
 export const shouldSuppressCarouselMedia = (settings: Settings, url: URL): boolean =>
   settings.declutter.mainFeed.hideCarousel && isMainFeedPath(url.pathname);
 
 export const shouldSuppressChannelCarouselMedia = (settings: Settings, url: URL): boolean =>
-  settings.declutter.channel.hideOfflinePreview && isChannelPagePath(url.pathname);
+  settings.declutter.channel.hideOfflinePreview && isChannelScopedPath(url.pathname);
 
 export const suppressMediaInContainer = (container: ParentNode): void => {
   const mediaNodes = container.querySelectorAll<HTMLMediaElement>("video, audio");

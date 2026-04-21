@@ -12,6 +12,25 @@ export async function getVod(vodId: string): Promise<VodRecord | undefined> {
   return db.get("vods", vodId);
 }
 
+export async function getVodsByIds(vodIds: string[]): Promise<Record<string, VodRecord | null>> {
+  const db = await withDb();
+  const records: Record<string, VodRecord | null> = {};
+
+  if (vodIds.length === 0) {
+    return records;
+  }
+
+  const transaction = db.transaction("vods", "readonly");
+  const store = transaction.objectStore("vods");
+
+  for (const vodId of vodIds) {
+    records[vodId] = (await store.get(vodId)) ?? null;
+  }
+
+  await transaction.done;
+  return records;
+}
+
 export async function getVodsByChannel(channelId: string): Promise<VodRecord[]> {
   const db = await withDb();
   return db.getAllFromIndex("vods", "by_channel", channelId);

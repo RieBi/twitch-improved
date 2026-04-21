@@ -10,6 +10,10 @@ import { waitForPlayerProbe } from "./playerProbe";
 const SAMPLE_INTERVAL_MS = 1_000;
 const FLUSH_INTERVAL_MS = 10_000;
 const SHOULD_LOG_FLUSH_DEBUG = import.meta.env.DEV;
+const TRACKER_ACTIVE_ATTR = "data-td-vodtracker-active";
+const TRACKER_LAST_FLUSH_ATTR = "data-td-vodtracker-last-flush";
+const TRACKER_LAST_META_ATTR = "data-td-vodtracker-last-meta";
+const TRACKER_LAST_ERROR_ATTR = "data-td-vodtracker-last-error";
 
 const loadSettingsOrDefault = async (): Promise<Settings> => {
   try {
@@ -39,8 +43,10 @@ export interface VodTrackerSession {
 }
 
 export const startVodTracker = async (vodId: string): Promise<VodTrackerSession> => {
+  document.documentElement.setAttribute(TRACKER_ACTIVE_ATTR, vodId);
   const playerProbe = await waitForPlayerProbe();
   if (!playerProbe) {
+    document.documentElement.setAttribute(TRACKER_LAST_ERROR_ATTR, "player-probe-missing");
     return {
       vodId,
       stop: async () => undefined
@@ -63,6 +69,7 @@ export const startVodTracker = async (vodId: string): Promise<VodTrackerSession>
   const flushPending = async (): Promise<void> => {
     const ranges = segmentBuffer.flushPendingRanges(settings.heatmap.bucketSeconds);
     if (ranges.length === 0) {
+      document.documentElement.setAttribute(TRACKER_LAST_FLUSH_ATTR, "skipped:no-ranges");
       if (SHOULD_LOG_FLUSH_DEBUG) {
         console.info("[td][flush][vod] skipped: no-ranges", { vodId });
       }
@@ -71,6 +78,10 @@ export const startVodTracker = async (vodId: string): Promise<VodTrackerSession>
 
     const watchedSeconds = totalDuration(ranges);
     if (watchedSeconds < settings.heatmap.minWatchSecondsToRecord) {
+      document.documentElement.setAttribute(
+        TRACKER_LAST_FLUSH_ATTR,
+        `skipped:below-min-watch:${watchedSeconds.toFixed(2)}`
+      );
       if (SHOULD_LOG_FLUSH_DEBUG) {
         console.info("[td][flush][vod] skipped: below-min-watch", {
           vodId,
@@ -84,6 +95,7 @@ export const startVodTracker = async (vodId: string): Promise<VodTrackerSession>
     const meta = toVodMeta(vodId);
     if (!meta) {
       segmentBuffer.requeueRanges(ranges);
+      document.documentElement.setAttribute(TRACKER_LAST_FLUSH_ATTR, "blocked:missing-meta");
       if (SHOULD_LOG_FLUSH_DEBUG) {
         console.warn("[td][flush][vod] blocked: missing-meta, requeued", {
           vodId,
@@ -93,6 +105,16 @@ export const startVodTracker = async (vodId: string): Promise<VodTrackerSession>
       }
       return;
     }
+
+    document.documentElement.setAttribute(
+      TRACKER_LAST_META_ATTR,
+      JSON.stringify({
+        channelId: meta.channelId,
+        channelLogin: meta.channelLogin,
+        durationSeconds: meta.durationSeconds,
+        createdAt: meta.createdAt
+      })
+    );
 
     if (SHOULD_LOG_FLUSH_DEBUG) {
       console.info("[td][flush][vod] sending", {
@@ -113,6 +135,7 @@ export const startVodTracker = async (vodId: string): Promise<VodTrackerSession>
 
     if (!response?.ok) {
       segmentBuffer.requeueRanges(ranges);
+      document.documentElement.setAttribute(TRACKER_LAST_FLUSH_ATTR, "failed:send-or-handler");
       if (SHOULD_LOG_FLUSH_DEBUG) {
         console.warn("[td][flush][vod] failed: send-or-handler, requeued", {
           vodId,
@@ -121,6 +144,11 @@ export const startVodTracker = async (vodId: string): Promise<VodTrackerSession>
       }
       return;
     }
+
+    document.documentElement.setAttribute(
+      TRACKER_LAST_FLUSH_ATTR,
+      `success:ranges=${ranges.length}:seconds=${watchedSeconds.toFixed(2)}`
+    );
 
     if (SHOULD_LOG_FLUSH_DEBUG) {
       console.info("[td][flush][vod] success", {
@@ -191,6 +219,7 @@ export const startVodTracker = async (vodId: string): Promise<VodTrackerSession>
       playerProbe.dispose();
       await flushPending();
       segmentBuffer.reset();
+      document.documentElement.removeAttribute(TRACKER_ACTIVE_ATTR);
     }
   };
 };

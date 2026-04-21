@@ -9,7 +9,6 @@ export const applyVodFlush = async (
   message: VodFlushMessage,
   nowMs: number = Date.now()
 ): Promise<VodRecord> => {
-  console.log("FLUSH");
   const existing = await getVod(message.vodId);
   const mergedRanges = merge(existing?.ranges ?? [], message.ranges);
 

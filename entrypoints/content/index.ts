@@ -1,4 +1,5 @@
 import { initDeclutter } from "./declutter";
+import { initHeatmap } from "./heatmap";
 import { initStreamMetadata } from "./tracker/streamMetadata";
 import { startVodTracker } from "./tracker/vodTracker";
 import { createVodTrackerLifecycle } from "./tracker/vodTrackerLifecycle";
@@ -12,10 +13,18 @@ export default defineContentScript({
     await sendMsg<{ ok: boolean }>({ type: "ensureMetadataBridge" }).catch(() => undefined);
 
     const declutter = await initDeclutter();
+    let heatmap = { refresh: () => undefined, dispose: () => undefined };
+    try {
+      heatmap = await initHeatmap();
+    } catch (error) {
+      document.documentElement.setAttribute("data-td-heatmap-boot", "failed");
+      console.error("[td][heatmap] init failed", error);
+    }
     const vodTrackerLifecycle = createVodTrackerLifecycle(startVodTracker);
 
     const notifyRouteChange = (): void => {
       declutter.refresh();
+      heatmap.refresh();
       void vodTrackerLifecycle.sync(new URL(window.location.href));
     };
 
@@ -34,6 +43,11 @@ export default defineContentScript({
     patchHistoryMethod("pushState");
     patchHistoryMethod("replaceState");
     window.addEventListener("popstate", notifyRouteChange);
+    window.addEventListener("beforeunload", () => {
+      declutter.dispose();
+      heatmap.dispose();
+      void vodTrackerLifecycle.stop();
+    });
     void vodTrackerLifecycle.sync(new URL(window.location.href));
   }
 });

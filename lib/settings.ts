@@ -26,6 +26,7 @@ export interface Settings {
     bucketSeconds: number;
     watchedThresholdPct: number;
     showOnTiles: boolean;
+    hideNativeTileProgressBar: boolean;
     showOnPlayerBar: boolean;
     indicatorStyle: IndicatorStyle;
     indicatorColor: string;
@@ -101,6 +102,7 @@ export const defaultSettings: Settings = {
     bucketSeconds: 5,
     watchedThresholdPct: 85,
     showOnTiles: true,
+    hideNativeTileProgressBar: false,
     showOnPlayerBar: true,
     indicatorStyle: "both",
     indicatorColor: "#9147ff",
@@ -253,6 +255,10 @@ const normalizeSettings = (raw: unknown): Settings => {
         100
       ),
       showOnTiles: asBoolean(heatmap.showOnTiles, defaultSettings.heatmap.showOnTiles),
+      hideNativeTileProgressBar: asBoolean(
+        heatmap.hideNativeTileProgressBar,
+        defaultSettings.heatmap.hideNativeTileProgressBar
+      ),
       showOnPlayerBar: asBoolean(heatmap.showOnPlayerBar, defaultSettings.heatmap.showOnPlayerBar),
       indicatorStyle: asIndicatorStyle(heatmap.indicatorStyle, defaultSettings.heatmap.indicatorStyle),
       indicatorColor: asColor(heatmap.indicatorColor, defaultSettings.heatmap.indicatorColor),

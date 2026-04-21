@@ -1,5 +1,6 @@
 import browser from "webextension-polyfill";
 import type { Msg } from "../lib/messaging";
+import { getVodsByIds } from "../lib/db/repo";
 import { applyVodFlush } from "../lib/vodFlush";
 import { installMainWorldMetadataBridge } from "./content/injected/mainWorld";
 
@@ -137,6 +138,41 @@ export default defineBackground(() => {
             });
           }
           return { ok: false };
+        });
+    }
+
+    if (typedMessage.type === "getVodRecords") {
+      const uniqueIds = Array.from(
+        new Set(typedMessage.ids.filter((id) => typeof id === "string" && id.length > 0))
+      );
+      if (SHOULD_LOG_FLUSH_DEBUG) {
+        console.info("[td][background][heatmap] getVodRecords:request", {
+          requestedCount: typedMessage.ids.length,
+          uniqueCount: uniqueIds.length
+        });
+      }
+
+      return getVodsByIds(uniqueIds)
+        .then((records) => {
+          if (SHOULD_LOG_FLUSH_DEBUG) {
+            const foundCount = Object.values(records).filter((record) => record !== null).length;
+            console.info("[td][background][heatmap] getVodRecords:response", {
+              uniqueCount: uniqueIds.length,
+              foundCount
+            });
+          }
+
+          return { records };
+        })
+        .catch((error: unknown) => {
+          if (SHOULD_LOG_FLUSH_DEBUG) {
+            console.error("[td][background][heatmap] getVodRecords:failed", {
+              uniqueCount: uniqueIds.length,
+              error
+            });
+          }
+
+          return { records: {} };
         });
     }
 
