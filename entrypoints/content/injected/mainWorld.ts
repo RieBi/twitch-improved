@@ -69,7 +69,9 @@ export const installMainWorldMetadataBridge = (): void => {
   };
 
   const dispatchBridgeEvent = <T>(eventName: string, detail: T): void => {
-    window.dispatchEvent(new CustomEvent<T>(eventName, { detail }));
+    // Use `document` so isolated-world content scripts receive the same DOM event
+    // (page `window` and extension `window` are not guaranteed to share listeners).
+    document.dispatchEvent(new CustomEvent<T>(eventName, { detail }));
   };
 
   const makeStreamSignature = (stream: BridgeStreamMeta): string =>
@@ -401,8 +403,10 @@ export const installMainWorldMetadataBridge = (): void => {
         const payload = await cloned.json();
         if (hasTargetOperation(payload)) {
           emitFromPayload(payload, "fetch");
-          emitFromApolloCache();
         }
+        // Always re-scan Apollo after GQL: stream entities often arrive under operation
+        // names we do not list, but cache.extract() still contains `Stream:*` for live pages.
+        emitFromApolloCache();
       } catch {
         // Non-JSON and opaque responses are expected; ignore.
       }

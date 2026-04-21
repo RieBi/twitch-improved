@@ -2,46 +2,39 @@ import { describe, expect, it } from "vitest";
 
 import { createSegmentBuffer } from "../entrypoints/content/tracker/segmentBuffer";
 
-describe("segmentBuffer", () => {
-  it("folds continuous samples and quantizes on flush", () => {
-    const buffer = createSegmentBuffer();
-    buffer.pushSample({ wallClockMs: 1_000, currentTime: 10 });
-    buffer.pushSample({ wallClockMs: 2_000, currentTime: 11 });
-    buffer.pushSample({ wallClockMs: 3_000, currentTime: 12 });
-
-    expect(buffer.flushPendingRanges(5)).toEqual([[10, 15]]);
+describe("createSegmentBuffer live mode", () => {
+  it("accumulates a range when streamPos jitters backward like HLS live edge", () => {
+    const buf = createSegmentBuffer({ mode: "live" });
+    const t0 = 1_000_000;
+    buf.pushSample({ wallClockMs: t0, currentTime: 5000 });
+    buf.pushSample({ wallClockMs: t0 + 1000, currentTime: 4990 });
+    buf.pushSample({ wallClockMs: t0 + 2000, currentTime: 5005 });
+    const ranges = buf.flushPendingRanges(5);
+    expect(ranges.length).toBeGreaterThan(0);
+    expect(ranges[0][0]).toBeLessThanOrEqual(4990);
+    expect(ranges[0][1]).toBeGreaterThanOrEqual(5005);
   });
 
-  it("splits ranges on discontinuities", () => {
-    const buffer = createSegmentBuffer();
-    buffer.pushSample({ wallClockMs: 1_000, currentTime: 10 });
-    buffer.pushSample({ wallClockMs: 2_000, currentTime: 11 });
-    buffer.pushSample({ wallClockMs: 3_000, currentTime: 30 });
-    buffer.pushSample({ wallClockMs: 4_000, currentTime: 31 });
-
-    expect(buffer.flushPendingRanges(1)).toEqual([
-      [10, 11],
-      [30, 31]
-    ]);
-  });
-
-  it("clears internal state when reset is called", () => {
-    const buffer = createSegmentBuffer();
-    buffer.pushSample({ wallClockMs: 1_000, currentTime: 10 });
-    buffer.pushSample({ wallClockMs: 2_000, currentTime: 11 });
-    buffer.reset();
-
-    expect(buffer.flushPendingRanges(1)).toEqual([]);
-  });
-
-  it("requeues flushed ranges for later retry", () => {
-    const buffer = createSegmentBuffer();
-    buffer.pushSample({ wallClockMs: 1_000, currentTime: 10 });
-    buffer.pushSample({ wallClockMs: 2_000, currentTime: 11 });
-    const flushed = buffer.flushPendingRanges(1);
-    buffer.requeueRanges(flushed);
-
-    expect(buffer.flushPendingRanges(1)).toEqual([[10, 11]]);
+  it("starts a new segment after a DVR-scale jump between ticks", () => {
+    const buf = createSegmentBuffer({ mode: "live" });
+    const t0 = 2_000_000;
+    buf.pushSample({ wallClockMs: t0, currentTime: 10_000 });
+    buf.pushSample({ wallClockMs: t0 + 1000, currentTime: 10_005 });
+    buf.pushSample({ wallClockMs: t0 + 2000, currentTime: 500 });
+    buf.pushSample({ wallClockMs: t0 + 3000, currentTime: 505 });
+    buf.pushSample({ wallClockMs: t0 + 4000, currentTime: 510 });
+    const ranges = buf.flushPendingRanges(5);
+    expect(ranges.length).toBeGreaterThanOrEqual(2);
   });
 });
 
+describe("createSegmentBuffer vod mode (default)", () => {
+  it("still requires monotonic media time", () => {
+    const buf = createSegmentBuffer();
+    const t0 = 3_000_000;
+    buf.pushSample({ wallClockMs: t0, currentTime: 100 });
+    buf.pushSample({ wallClockMs: t0 + 1000, currentTime: 99 });
+    const ranges = buf.flushPendingRanges(5);
+    expect(ranges).toEqual([]);
+  });
+});

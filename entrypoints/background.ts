@@ -1,6 +1,7 @@
 import browser from "webextension-polyfill";
 import type { Msg } from "../lib/messaging";
 import { getVodsByIds } from "../lib/db/repo";
+import { applyLiveFlush } from "../lib/liveFlush";
 import { applyVodFlush } from "../lib/vodFlush";
 import { installMainWorldMetadataBridge } from "./content/injected/mainWorld";
 
@@ -96,13 +97,44 @@ export default defineBackground(() => {
     }
 
     if (typedMessage.type === "flushRanges") {
+      if (typedMessage.kind === "live") {
+        if (SHOULD_LOG_FLUSH_DEBUG) {
+          console.info("[td][background][flush] received live", {
+            sessionId: typedMessage.sessionId,
+            rangeCount: typedMessage.ranges.length
+          });
+        }
+
+        return applyLiveFlush(typedMessage)
+          .then((record) => {
+            if (SHOULD_LOG_FLUSH_DEBUG) {
+              console.info("[td][background][flush] persisted live", {
+                sessionId: typedMessage.sessionId,
+                rangeCount: record.ranges.length
+              });
+            }
+
+            return { ok: true as const };
+          })
+          .catch((error: unknown) => {
+            if (SHOULD_LOG_FLUSH_DEBUG) {
+              console.error("[td][background][flush] live failed", {
+                sessionId: typedMessage.sessionId,
+                error
+              });
+            }
+
+            return { ok: false as const };
+          });
+      }
+
       if (typedMessage.kind !== "vod") {
         if (SHOULD_LOG_FLUSH_DEBUG) {
           console.warn("[td][background][flush] unsupported-kind", {
             kind: typedMessage.kind
           });
         }
-        return Promise.resolve({ ok: false, reason: "live-not-implemented" });
+        return Promise.resolve({ ok: false });
       }
 
       if (SHOULD_LOG_FLUSH_DEBUG) {

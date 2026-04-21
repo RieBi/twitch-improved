@@ -1,4 +1,5 @@
 import type { BridgeStreamMeta, BridgeVodMeta, BridgeVodTileMeta } from "../../../lib/messaging";
+import { getChannelLoginFromPathname } from "../declutter/routeMatch";
 
 const STREAM_EVENT_NAME = "td:stream-meta";
 const VOD_EVENT_NAME = "td:vod-meta";
@@ -61,6 +62,14 @@ const onStreamMeta = (event: Event): void => {
     return;
   }
 
+  const urlLogin = getChannelLoginFromPathname(window.location.pathname);
+  if (
+    urlLogin &&
+    event.detail.channelLogin.toLowerCase() !== urlLogin.toLowerCase()
+  ) {
+    return;
+  }
+
   metadataState.latestStream = event.detail;
   if (SHOULD_LOG_METADATA && !isVodPage()) {
     console.info("[td][metadata][live]", {
@@ -105,9 +114,9 @@ export const initStreamMetadata = (): void => {
   }
 
   metadataState.initialized = true;
-  window.addEventListener(STREAM_EVENT_NAME, onStreamMeta);
-  window.addEventListener(VOD_EVENT_NAME, onVodMeta);
-  window.addEventListener(VOD_TILE_EVENT_NAME, onVodTileMeta);
+  document.addEventListener(STREAM_EVENT_NAME, onStreamMeta);
+  document.addEventListener(VOD_EVENT_NAME, onVodMeta);
+  document.addEventListener(VOD_TILE_EVENT_NAME, onVodTileMeta);
 };
 
 export const getLatestStreamMeta = (): BridgeStreamMeta | null => metadataState.latestStream;

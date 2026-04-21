@@ -12,12 +12,21 @@ interface SegmentState {
 
 const MAX_ALLOWED_DRIFT_SECONDS = 0.5;
 
+/** Live `streamPosSec` jitters backward when HLS refreshes `seekable`; do not use VOD-style drift rules. */
+// `setInterval` is not real-time (tab load, throttling, long tasks); gaps >4s are common at 1Hz.
+const LIVE_MAX_WALL_GAP_SECONDS = 45;
+const LIVE_SEEK_JUMP_SECONDS = 120;
+
 const isValidSample = (sample: TrackerSample): boolean => {
   return Number.isFinite(sample.wallClockMs) && Number.isFinite(sample.currentTime) && sample.currentTime >= 0;
 };
 
 const isValidSegment = (segment: SegmentState | null): segment is SegmentState =>
   !!segment && Number.isFinite(segment.start) && Number.isFinite(segment.end) && segment.end > segment.start;
+
+export interface SegmentBufferOptions {
+  mode?: "vod" | "live";
+}
 
 export interface SegmentBuffer {
   pushSample(sample: TrackerSample): void;
@@ -26,7 +35,8 @@ export interface SegmentBuffer {
   reset(): void;
 }
 
-export const createSegmentBuffer = (): SegmentBuffer => {
+export const createSegmentBuffer = (options: SegmentBufferOptions = {}): SegmentBuffer => {
+  const mode = options.mode ?? "vod";
   let lastSample: TrackerSample | null = null;
   let openSegment: SegmentState | null = null;
   let closedSegments: Range[] = [];
@@ -66,6 +76,33 @@ export const createSegmentBuffer = (): SegmentBuffer => {
 
       const wallDeltaSeconds = (sample.wallClockMs - lastSample.wallClockMs) / 1000;
       const mediaDeltaSeconds = sample.currentTime - lastSample.currentTime;
+
+      if (mode === "live") {
+        const wallGapOk =
+          wallDeltaSeconds > 0 &&
+          wallDeltaSeconds <= LIVE_MAX_WALL_GAP_SECONDS &&
+          Math.abs(mediaDeltaSeconds) <= LIVE_SEEK_JUMP_SECONDS;
+
+        if (!wallGapOk) {
+          closeOpenSegment();
+          startOpenSegmentAt(sample.currentTime);
+          lastSample = sample;
+          return;
+        }
+
+        if (!openSegment) {
+          startOpenSegmentAt(lastSample.currentTime);
+        }
+
+        if (openSegment) {
+          openSegment.start = Math.min(openSegment.start, sample.currentTime);
+          openSegment.end = Math.max(openSegment.end, sample.currentTime);
+        }
+
+        lastSample = sample;
+        return;
+      }
+
       const isContinuous =
         wallDeltaSeconds > 0 &&
         mediaDeltaSeconds >= 0 &&
