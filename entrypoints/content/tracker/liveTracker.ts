@@ -4,6 +4,7 @@ import { sendMsg, type LiveMeta } from "../../../lib/messaging";
 import { defaultSettings, loadSettings, type Settings } from "../../../lib/settings";
 import { computeLiveStreamPositionSec } from "../../../lib/util/liveStreamPosition";
 import { totalDuration } from "../../../lib/util/ranges";
+import { getChannelLoginFromPathname, isLiveChannelSurfacePath } from "../declutter/routeMatch";
 import { createSegmentBuffer } from "./segmentBuffer";
 import { waitForPlayerProbe } from "./playerProbe";
 
@@ -14,6 +15,7 @@ const TRACKER_ACTIVE_ATTR = "data-td-livetracker-active";
 const TRACKER_LAST_FLUSH_ATTR = "data-td-livetracker-last-flush";
 const TRACKER_LAST_META_ATTR = "data-td-livetracker-last-meta";
 const TRACKER_LAST_ERROR_ATTR = "data-td-livetracker-last-error";
+const loginsMatch = (left: string, right: string): boolean => left.toLowerCase() === right.toLowerCase();
 
 const loadSettingsOrDefault = async (): Promise<Settings> => {
   try {
@@ -84,7 +86,29 @@ export const startLiveTracker = async (
     }
   };
 
-  const flushPending = async (): Promise<void> => {
+  const isUrlForThisLiveSession = (): boolean => {
+    const pathname = window.location.pathname;
+    if (!isLiveChannelSurfacePath(pathname)) {
+      return false;
+    }
+
+    const login = getChannelLoginFromPathname(pathname);
+    return login !== null && loginsMatch(login, meta.channelLogin);
+  };
+
+  const flushPending = async (options?: { force?: boolean }): Promise<void> => {
+    if (!options?.force && !isUrlForThisLiveSession()) {
+      segmentBuffer.reset();
+      document.documentElement.setAttribute(TRACKER_LAST_FLUSH_ATTR, "skipped:off-live-route");
+      if (SHOULD_LOG_FLUSH_DEBUG) {
+        console.info("[td][flush][live] skipped: off-live-route", {
+          sessionId,
+          pathname: window.location.pathname
+        });
+      }
+      return;
+    }
+
     const ranges = segmentBuffer.flushPendingRanges(settings.heatmap.bucketSeconds);
     writeDiag();
     if (ranges.length === 0) {
@@ -165,6 +189,10 @@ export const startLiveTracker = async (
   const sampleTick = (): void => {
     if (!settings.heatmap.enabled || !settings.heatmap.trackLiveStreams) {
       diag.skipGate += 1;
+      return;
+    }
+
+    if (!isUrlForThisLiveSession()) {
       return;
     }
 
@@ -250,7 +278,7 @@ export const startLiveTracker = async (
       window.removeEventListener("beforeunload", handleBeforeUnload);
       browser.storage.onChanged.removeListener(onStorageChanged);
       playerProbe.dispose();
-      await flushPending();
+      await flushPending({ force: true });
       segmentBuffer.reset();
       document.documentElement.removeAttribute(TRACKER_ACTIVE_ATTR);
     }

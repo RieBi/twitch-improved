@@ -34,6 +34,7 @@ export const createLiveTrackerLifecycle = (
 ): LiveTrackerLifecycleController => {
   let current: LiveTrackerSession | null = null;
   let activeSessionId: string | null = null;
+  let disposed = false;
   let opChain: Promise<void> = Promise.resolve();
 
   const stopInternal = async (): Promise<void> => {
@@ -98,6 +99,10 @@ export const createLiveTrackerLifecycle = (
   };
 
   const enqueueResync = (): void => {
+    if (disposed) {
+      return;
+    }
+
     opChain = opChain.then(async () => {
       await maybeStartFromUrl(new URL(window.location.href));
     });
@@ -116,6 +121,10 @@ export const createLiveTrackerLifecycle = (
 
   return {
     sync(url: URL): Promise<void> {
+      if (disposed) {
+        return opChain;
+      }
+
       opChain = opChain.then(async () => {
         await maybeStartFromUrl(url);
       });
@@ -124,6 +133,13 @@ export const createLiveTrackerLifecycle = (
 
     stop(): Promise<void> {
       opChain = opChain.then(async () => {
+        if (disposed) {
+          return;
+        }
+
+        disposed = true;
+        document.removeEventListener(STREAM_META_EVENT, onStreamMeta as EventListener);
+        browser.storage.onChanged.removeListener(onStorageChanged);
         activeSessionId = null;
         await stopInternal();
       });
