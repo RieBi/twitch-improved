@@ -1,11 +1,7 @@
-const parseVodIdFromUrl = (url: URL): string | null => {
-  const match = /^\/videos\/(\d+)(?:\/|$)/.exec(url.pathname);
-  if (!match) {
-    return null;
-  }
+import { parseTwitchVodIdFromPathname } from "../declutter/routeMatch";
+import { VOD_EVENT_NAME } from "./streamMetadata";
 
-  return match[1] ?? null;
-};
+const parseVodIdFromUrl = (url: URL): string | null => parseTwitchVodIdFromPathname(url.pathname);
 
 export type VodTrackerStarter = (vodId: string) => Promise<VodTrackerSession>;
 
@@ -24,43 +20,59 @@ export const createVodTrackerLifecycle = (startTracker: VodTrackerStarter): VodT
   let activeVodId: string | null = null;
   let opChain: Promise<void> = Promise.resolve();
 
+  const maybeStartFromUrl = async (url: URL): Promise<void> => {
+    const nextVodId = parseVodIdFromUrl(url);
+    if (!nextVodId) {
+      if (current) {
+        await current.stop();
+      }
+      current = null;
+      activeVodId = null;
+      return;
+    }
+
+    if (activeVodId === nextVodId) {
+      return;
+    }
+
+    if (current) {
+      await current.stop();
+      current = null;
+    }
+
+    activeVodId = nextVodId;
+    const nextSession = await startTracker(nextVodId);
+    if (activeVodId !== nextVodId) {
+      await nextSession.stop();
+      return;
+    }
+
+    current = nextSession;
+  };
+
+  const enqueueResync = (): void => {
+    opChain = opChain.then(async () => {
+      await maybeStartFromUrl(new URL(window.location.href));
+    });
+  };
+
+  const onVodMeta = (): void => {
+    enqueueResync();
+  };
+
+  document.addEventListener(VOD_EVENT_NAME, onVodMeta as EventListener);
+
   return {
     sync(url: URL): Promise<void> {
-      const nextVodId = parseVodIdFromUrl(url);
       opChain = opChain.then(async () => {
-        if (!nextVodId) {
-          if (current) {
-            await current.stop();
-          }
-          current = null;
-          activeVodId = null;
-          return;
-        }
-
-        if (activeVodId === nextVodId) {
-          return;
-        }
-
-        if (current) {
-          await current.stop();
-          current = null;
-        }
-
-        activeVodId = nextVodId;
-        const nextSession = await startTracker(nextVodId);
-        if (activeVodId !== nextVodId) {
-          await nextSession.stop();
-          return;
-        }
-
-        current = nextSession;
+        await maybeStartFromUrl(url);
       });
-
       return opChain;
     },
 
     stop(): Promise<void> {
       opChain = opChain.then(async () => {
+        document.removeEventListener(VOD_EVENT_NAME, onVodMeta as EventListener);
         activeVodId = null;
         if (!current) {
           return;
@@ -74,4 +86,3 @@ export const createVodTrackerLifecycle = (startTracker: VodTrackerStarter): VodT
     }
   };
 };
-

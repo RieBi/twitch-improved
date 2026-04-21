@@ -2,8 +2,8 @@ import type { BridgeStreamMeta, BridgeVodMeta, BridgeVodTileMeta } from "../../.
 import { getChannelLoginFromPathname } from "../declutter/routeMatch";
 
 const STREAM_EVENT_NAME = "td:stream-meta";
-const VOD_EVENT_NAME = "td:vod-meta";
-const VOD_TILE_EVENT_NAME = "td:vod-tile-meta";
+export const VOD_EVENT_NAME = "td:vod-meta";
+export const VOD_TILE_EVENT_NAME = "td:vod-tile-meta";
 const SHOULD_LOG_METADATA = import.meta.env.DEV;
 const isVodPage = (): boolean => window.location.pathname.startsWith("/videos/");
 
@@ -31,7 +31,7 @@ const isValidStreamMeta = (value: unknown): value is BridgeStreamMeta => {
   );
 };
 
-const isValidVodMeta = (value: unknown): value is BridgeVodMeta => {
+export const isValidVodMeta = (value: unknown): value is BridgeVodMeta => {
   if (!isRecord(value)) {
     return false;
   }

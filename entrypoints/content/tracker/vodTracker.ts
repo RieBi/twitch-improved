@@ -1,9 +1,10 @@
 import browser from "webextension-polyfill";
 
+import { parseTwitchVodIdFromPathname } from "../declutter/routeMatch";
 import { sendMsg, type Msg } from "../../../lib/messaging";
 import { defaultSettings, loadSettings, type Settings } from "../../../lib/settings";
 import { totalDuration } from "../../../lib/util/ranges";
-import { getLatestVodMeta } from "./streamMetadata";
+import { getLatestVodMeta, isValidVodMeta, VOD_EVENT_NAME } from "./streamMetadata";
 import { createSegmentBuffer } from "./segmentBuffer";
 import { waitForPlayerProbe } from "./playerProbe";
 
@@ -66,7 +67,21 @@ export const startVodTracker = async (vodId: string): Promise<VodTrackerSession>
 
   browser.storage.onChanged.addListener(onStorageChanged);
 
-  const flushPending = async (): Promise<void> => {
+  const isUrlForThisVod = (): boolean => parseTwitchVodIdFromPathname(window.location.pathname) === vodId;
+
+  const flushPending = async (options?: { force?: boolean }): Promise<void> => {
+    if (!options?.force && !isUrlForThisVod()) {
+      segmentBuffer.reset();
+      document.documentElement.setAttribute(TRACKER_LAST_FLUSH_ATTR, "skipped:off-vod-route");
+      if (SHOULD_LOG_FLUSH_DEBUG) {
+        console.info("[td][flush][vod] skipped: off-vod-route", {
+          vodId,
+          pathname: window.location.pathname
+        });
+      }
+      return;
+    }
+
     const ranges = segmentBuffer.flushPendingRanges(settings.heatmap.bucketSeconds);
     if (ranges.length === 0) {
       document.documentElement.setAttribute(TRACKER_LAST_FLUSH_ATTR, "skipped:no-ranges");
@@ -159,6 +174,10 @@ export const startVodTracker = async (vodId: string): Promise<VodTrackerSession>
   };
 
   const sampleTick = (): void => {
+    if (!isUrlForThisVod()) {
+      return;
+    }
+
     const state = playerProbe.getState();
     if (state.paused || state.ended || state.readyState < 3) {
       return;
@@ -203,6 +222,24 @@ export const startVodTracker = async (vodId: string): Promise<VodTrackerSession>
   document.addEventListener("visibilitychange", handleVisibilityChange);
   window.addEventListener("beforeunload", handleBeforeUnload);
 
+  const onVodMeta = (event: Event): void => {
+    if (!(event instanceof CustomEvent) || !isValidVodMeta(event.detail)) {
+      return;
+    }
+
+    if (event.detail.vodId !== vodId) {
+      return;
+    }
+
+    if (!isUrlForThisVod()) {
+      return;
+    }
+
+    void flushPending();
+  };
+
+  document.addEventListener(VOD_EVENT_NAME, onVodMeta as EventListener);
+
   return {
     vodId,
     stop: async (): Promise<void> => {
@@ -215,9 +252,10 @@ export const startVodTracker = async (vodId: string): Promise<VodTrackerSession>
       window.clearInterval(flushTimer);
       document.removeEventListener("visibilitychange", handleVisibilityChange);
       window.removeEventListener("beforeunload", handleBeforeUnload);
+      document.removeEventListener(VOD_EVENT_NAME, onVodMeta as EventListener);
       browser.storage.onChanged.removeListener(onStorageChanged);
       playerProbe.dispose();
-      await flushPending();
+      await flushPending({ force: true });
       segmentBuffer.reset();
       document.documentElement.removeAttribute(TRACKER_ACTIVE_ATTR);
     }

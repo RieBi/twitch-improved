@@ -3,7 +3,8 @@ import { describe, expect, it } from "vitest";
 import {
   getChannelLoginFromPathname,
   isChannelPagePath,
-  isLiveChannelSurfacePath
+  isLiveChannelSurfacePath,
+  parseTwitchVodIdFromPathname
 } from "../entrypoints/content/declutter/routeMatch";
 
 describe("routeMatch live tracker paths", () => {
@@ -29,5 +30,19 @@ describe("routeMatch live tracker paths", () => {
 
   it("getChannelLoginFromPathname reads first segment when present", () => {
     expect(getChannelLoginFromPathname("/x/schedule")).toBe("x");
+  });
+});
+
+describe("parseTwitchVodIdFromPathname", () => {
+  it("parses VOD player path and optional trailing segment", () => {
+    expect(parseTwitchVodIdFromPathname("/videos/123")).toBe("123");
+    expect(parseTwitchVodIdFromPathname("/videos/123/")).toBe("123");
+    expect(parseTwitchVodIdFromPathname("/videos/123/extra")).toBe("123");
+  });
+
+  it("returns null when not a VOD player path", () => {
+    expect(parseTwitchVodIdFromPathname("/shroud")).toBeNull();
+    expect(parseTwitchVodIdFromPathname("/shroud/videos")).toBeNull();
+    expect(parseTwitchVodIdFromPathname("/videos/abc")).toBeNull();
   });
 });

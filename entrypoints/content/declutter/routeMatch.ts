@@ -19,6 +19,16 @@ export const isMainFeedPath = (pathname: string): boolean => pathname === "/";
 
 export const isVodPagePath = (pathname: string): boolean => /^\/videos\/\d+\/?$/.test(pathname);
 
+/** Numeric VOD id from `/videos/{id}` player path (allows trailing segments after the id). */
+export const parseTwitchVodIdFromPathname = (pathname: string): string | null => {
+  const match = /^\/videos\/(\d+)/.exec(pathname);
+  if (!match) {
+    return null;
+  }
+
+  return match[1] ?? null;
+};
+
 export const isChannelScopedPath = (pathname: string): boolean => {
   const segment = getFirstPathSegment(pathname);
   if (!segment || RESERVED_LOGIN_SEGMENTS.has(segment.toLowerCase())) {
