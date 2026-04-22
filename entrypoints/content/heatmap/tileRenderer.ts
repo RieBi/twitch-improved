@@ -1,6 +1,7 @@
 import type { VodRecord } from "../../../lib/db/schema";
 import type { Settings } from "../../../lib/settings";
 import { coveragePct } from "../../../lib/util/ranges";
+import { clearTileMarkButton, ensureTileMarkButton } from "./markWatchedButton";
 
 const PROCESSED_ATTR = "data-td-processed";
 const VOD_ID_ATTR = "data-td-vod-id";
@@ -325,8 +326,16 @@ const getThumbnailElements = (
   return { host: host ?? cardRoot, image: chosenImage };
 };
 
+const resolveMarkButtonHost = (tile: HTMLElement, vodId: string): HTMLElement => {
+  const resolved = getThumbnailElements(tile, vodId);
+  return resolved.host instanceof HTMLImageElement
+    ? (resolved.host.parentElement ?? tile)
+    : resolved.host;
+};
+
 const clearTileDecorations = (tile: HTMLElement): void => {
   tile.removeAttribute(PROCESSED_ATTR);
+  clearTileMarkButton(tile);
 
   const overlays = tile.querySelectorAll(`.${HEATMAP_CLASS}`);
   for (const overlay of overlays) {
@@ -390,31 +399,11 @@ const ensureWatchedChip = (host: HTMLElement): HTMLElement => {
     chipHost.style.setProperty("position", "relative");
   }
 
+  chipHost.setAttribute("data-td-tile-watch-area", "");
+
   const chip = document.createElement("div");
   chip.className = WATCHED_CHIP_CLASS;
   chip.textContent = "Watched";
-  chip.style.setProperty("position", "absolute", "important");
-  chip.style.setProperty("top", "6px", "important");
-  chip.style.setProperty("right", "6px", "important");
-  chip.style.setProperty("left", "auto", "important");
-  chip.style.setProperty("bottom", "auto", "important");
-  chip.style.setProperty("z-index", "10000", "important");
-  chip.style.setProperty("display", "inline-flex", "important");
-  chip.style.setProperty("align-items", "center", "important");
-  chip.style.setProperty("justify-content", "center", "important");
-  chip.style.setProperty("width", "auto", "important");
-  chip.style.setProperty("height", "auto", "important");
-  chip.style.setProperty("max-width", "none", "important");
-  chip.style.setProperty("max-height", "none", "important");
-  chip.style.setProperty("padding", "3px 6px", "important");
-  chip.style.setProperty("border-radius", "999px", "important");
-  chip.style.setProperty("font-size", "10px", "important");
-  chip.style.setProperty("line-height", "1", "important");
-  chip.style.setProperty("font-weight", "600", "important");
-  chip.style.setProperty("white-space", "nowrap", "important");
-  chip.style.setProperty("color", "#fff", "important");
-  chip.style.setProperty("pointer-events", "none", "important");
-  chip.style.setProperty("box-shadow", "0 1px 2px rgba(0,0,0,0.45)", "important");
   chipHost.appendChild(chip);
   return chip;
 };
@@ -594,6 +583,7 @@ export const renderTile = ({ tile, vodId, record, settings }: RenderTileInput): 
       host.classList.add(HOST_CLASS);
     }
     setDebugBadge(host, "NR");
+    ensureTileMarkButton(resolveMarkButtonHost(tile, vodId), { vodId, record: null, settings });
     return {
       rendered: false,
       reason: "no-record",
@@ -609,6 +599,7 @@ export const renderTile = ({ tile, vodId, record, settings }: RenderTileInput): 
       host.classList.add(HOST_CLASS);
     }
     setDebugBadge(host, "OFF");
+    ensureTileMarkButton(resolveMarkButtonHost(tile, vodId), { vodId, record, settings });
     return {
       rendered: false,
       reason: "heatmap-disabled",
@@ -624,6 +615,7 @@ export const renderTile = ({ tile, vodId, record, settings }: RenderTileInput): 
       host.classList.add(HOST_CLASS);
     }
     setDebugBadge(host, "TILES_OFF");
+    ensureTileMarkButton(resolveMarkButtonHost(tile, vodId), { vodId, record, settings });
     return {
       rendered: false,
       reason: "tiles-disabled",
@@ -668,6 +660,7 @@ export const renderTile = ({ tile, vodId, record, settings }: RenderTileInput): 
   tile.setAttribute(VOD_ID_ATTR, vodId);
   if (!durationSeconds || durationSeconds <= 0) {
     setDebugBadge(host, "ND");
+    ensureTileMarkButton(host, { vodId, record, settings });
     return {
       rendered: watched,
       reason: "no-duration",
@@ -679,6 +672,7 @@ export const renderTile = ({ tile, vodId, record, settings }: RenderTileInput): 
 
   if (record.ranges.length === 0) {
     setDebugBadge(host, "NRNG");
+    ensureTileMarkButton(host, { vodId, record, settings });
     return {
       rendered: watched,
       reason: "no-ranges",
@@ -689,6 +683,7 @@ export const renderTile = ({ tile, vodId, record, settings }: RenderTileInput): 
   }
 
   setDebugBadge(host, `OK:${segmentCount}`);
+  ensureTileMarkButton(host, { vodId, record, settings });
   return {
     rendered: segmentCount > 0 || watched,
     reason: "rendered",

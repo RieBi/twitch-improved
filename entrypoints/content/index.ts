@@ -1,5 +1,6 @@
 import { initDeclutter } from "./declutter";
 import { initHeatmap } from "./heatmap";
+import { createMarkWatchedPlayerLifecycle } from "./heatmap/markWatchedPlayer";
 import { initStreamMetadata } from "./tracker/streamMetadata";
 import { startLiveTracker } from "./tracker/liveTracker";
 import { createLiveTrackerLifecycle } from "./tracker/liveTrackerLifecycle";
@@ -24,12 +25,14 @@ export default defineContentScript({
     }
     const vodTrackerLifecycle = createVodTrackerLifecycle(startVodTracker);
     const liveTrackerLifecycle = createLiveTrackerLifecycle(startLiveTracker);
+    const markWatchedPlayerLifecycle = createMarkWatchedPlayerLifecycle();
 
     const notifyRouteChange = (): void => {
       declutter.refresh();
       heatmap.refresh();
       void vodTrackerLifecycle.sync(new URL(window.location.href));
       void liveTrackerLifecycle.sync(new URL(window.location.href));
+      markWatchedPlayerLifecycle.sync(new URL(window.location.href));
     };
 
     const patchHistoryMethod = (method: "pushState" | "replaceState"): void => {
@@ -50,10 +53,12 @@ export default defineContentScript({
     window.addEventListener("beforeunload", () => {
       declutter.dispose();
       heatmap.dispose();
+      markWatchedPlayerLifecycle.dispose();
       void liveTrackerLifecycle.stop();
       void vodTrackerLifecycle.stop();
     });
     void vodTrackerLifecycle.sync(new URL(window.location.href));
     void liveTrackerLifecycle.sync(new URL(window.location.href));
+    markWatchedPlayerLifecycle.sync(new URL(window.location.href));
   }
 });

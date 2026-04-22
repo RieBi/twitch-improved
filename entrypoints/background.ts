@@ -3,6 +3,7 @@ import type { Msg } from "../lib/messaging";
 import { getVodsByIds } from "../lib/db/repo";
 import { linkEligibleLiveSessionsToVod, runUnlinkedLiveSessionSweep } from "../lib/liveVodLinking";
 import { applyLiveFlush } from "../lib/liveFlush";
+import { toggleMarkedWatched } from "../lib/toggleMarkedWatched";
 import { applyVodFlush } from "../lib/vodFlush";
 import { installMainWorldMetadataBridge } from "./content/injected/mainWorld";
 
@@ -206,6 +207,24 @@ export default defineBackground(() => {
           }
           return { ok: false };
         });
+    }
+
+    if (typedMessage.type === "toggleMarkedWatched") {
+      const vodId = typedMessage.vodId;
+      if (typeof vodId !== "string" || vodId.length === 0) {
+        return Promise.resolve({ ok: false as const });
+      }
+
+      return toggleMarkedWatched(vodId)
+        .then(async (record) => {
+          await broadcastVodRecordChanged({
+            type: "vodRecordChanged",
+            vodId,
+            record
+          });
+          return { ok: true as const };
+        })
+        .catch(() => ({ ok: false as const }));
     }
 
     if (typedMessage.type === "getVodRecords") {
