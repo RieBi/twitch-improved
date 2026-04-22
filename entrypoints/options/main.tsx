@@ -12,31 +12,20 @@ import {
   type ImportMode
 } from "../../lib/messaging";
 import { defaultSettings, loadSettings, saveSettings, type Settings } from "../../lib/settings";
+import { DataSection } from "./components/DataSection";
 import { DeclutterSection } from "./components/DeclutterSection";
 import { HeatmapSection } from "./components/HeatmapSection";
 
-const formatBytes = (bytes?: number): string => {
-  if (!bytes || bytes <= 0) {
-    return "0 B";
-  }
-
-  const units = ["B", "KB", "MB", "GB"];
-  let size = bytes;
-  let unitIndex = 0;
-
-  while (size >= 1024 && unitIndex < units.length - 1) {
-    size /= 1024;
-    unitIndex += 1;
-  }
-
-  return `${size.toFixed(size >= 10 || unitIndex === 0 ? 0 : 1)} ${units[unitIndex]}`;
-};
-
 function App() {
-  const [settings, setSettings] = useState<Settings>(defaultSettings);
+  const declutterTitle = "Declutter";
+  const heatmapTitle = "Watch heatmap";
+  const dataTitle = "Data";
+
+  const [settings, setSettings] = useState<Settings | null>(null);
   const [loading, setLoading] = useState(true);
   const [saveError, setSaveError] = useState<string | null>(null);
-  const [counts, setCounts] = useState({ vods: 0, liveSessions: 0 });
+  const [saveState, setSaveState] = useState<"loading" | "saving" | "saved" | "error">("loading");
+  const [counts, setCounts] = useState<{ vods: number; liveSessions: number } | null>(null);
   const [storageUsage, setStorageUsage] = useState<{ used: number; quota: number } | null>(null);
   const [diagnostics, setDiagnostics] = useState<GetDiagnosticsResponse["selectorMisses"]>([]);
   const [dataError, setDataError] = useState<string | null>(null);
@@ -44,40 +33,16 @@ function App() {
   const [importMode, setImportMode] = useState<ImportMode>("merge");
   const [busyAction, setBusyAction] = useState<"export" | "import" | "clear" | null>(null);
 
-  useEffect(() => {
-    let cancelled = false;
-
-    const init = async () => {
-      try {
-        const loaded = await loadSettings(browser.storage.sync);
-        if (!cancelled) {
-          setSettings(loaded);
-        }
-      } catch (error) {
-        if (!cancelled) {
-          setSaveError(error instanceof Error ? error.message : "Failed to load settings.");
-        }
-      } finally {
-        if (!cancelled) {
-          setLoading(false);
-        }
-      }
-    };
-
-    void init();
-
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
-  const refreshDataPanel = () => {
-    setDataError(null);
-    return Promise.all([
+  const fetchDataPanel = () =>
+    Promise.all([
       sendMsg<GetDataSummaryResponse>({ type: "getDataSummary" }),
       sendMsg<GetDiagnosticsResponse>({ type: "getDiagnostics" }),
       navigator.storage?.estimate?.() ?? Promise.resolve({ usage: 0, quota: 0 })
-    ])
+    ]);
+
+  const refreshDataPanel = () => {
+    setDataError(null);
+    return fetchDataPanel()
       .then(([summary, diagnosticsResponse, estimate]) => {
         setCounts(summary.counts);
         setDiagnostics(diagnosticsResponse.selectorMisses.slice().reverse());
@@ -92,7 +57,48 @@ function App() {
   };
 
   useEffect(() => {
-    void refreshDataPanel();
+    let cancelled = false;
+
+    const init = async () => {
+      try {
+        const [loadedSettings, [summary, diagnosticsResponse, estimate]] = await Promise.all([
+          loadSettings(browser.storage.sync),
+          fetchDataPanel()
+        ]);
+
+        if (cancelled) {
+          return;
+        }
+
+        setSettings(loadedSettings);
+        setCounts(summary.counts);
+        setDiagnostics(diagnosticsResponse.selectorMisses.slice().reverse());
+        setStorageUsage({
+          used: estimate.usage ?? 0,
+          quota: estimate.quota ?? 0
+        });
+        setSaveState("saved");
+      } catch (error) {
+        if (cancelled) {
+          return;
+        }
+
+        const message = error instanceof Error ? error.message : "Failed to load options data.";
+        setSaveError(message);
+        setDataError(message);
+        setSaveState("error");
+      } finally {
+        if (!cancelled) {
+          setLoading(false);
+        }
+      }
+    };
+
+    void init();
+
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   const statusText = useMemo(() => {
@@ -100,15 +106,25 @@ function App() {
       return "Loading settings...";
     }
 
-    return saveError ? `Error: ${saveError}` : "Changes save automatically.";
-  }, [loading, saveError]);
+    if (saveState === "saving") {
+      return "Saving changes...";
+    }
+
+    if (saveState === "error") {
+      return saveError ? `Save failed: ${saveError}` : "Save failed.";
+    }
+
+    return "All saved";
+  }, [loading, saveError, saveState]);
 
   const persistSettings = (next: Settings) => {
     setSettings(next);
     setSaveError(null);
+    setSaveState("saving");
     void saveSettings(next, browser.storage.sync)
       .then((normalized) => {
         setSettings(normalized);
+        setSaveState("saved");
         void sendMsg<void>({ type: "settingsChanged" }).catch((error) => {
           // Settings are already persisted; ignore transient background messaging issues.
           console.warn("Failed to dispatch settingsChanged.", error);
@@ -116,6 +132,7 @@ function App() {
       })
       .catch((error) => {
         setSaveError(error instanceof Error ? error.message : "Failed to save settings.");
+        setSaveState("error");
       });
   };
 
@@ -206,85 +223,58 @@ function App() {
 
   return (
     <main className="app">
-      <header className="app-header">
-        <h1>Twitch Improved</h1>
-        <p className="app-subtitle">{statusText}</p>
-      </header>
-
-      <DeclutterSection
-        value={settings.declutter}
-        onChange={(declutter) => persistSettings({ ...settings, declutter })}
-      />
-
-      <HeatmapSection
-        title="Watch heatmap"
-        value={settings.heatmap}
-        onChange={(heatmap) => persistSettings({ ...settings, heatmap })}
-      />
-
-      <section className="panel" aria-labelledby="data-heading">
-        <h2 id="data-heading">Data</h2>
-        <p className="panel-description">Manage saved watch history, backups, and selector diagnostics.</p>
-
-        <div className="data-summary">
-          <div>VOD records: {counts.vods}</div>
-          <div>Live sessions: {counts.liveSessions}</div>
-          <div>
-            Storage: {formatBytes(storageUsage?.used)} / {formatBytes(storageUsage?.quota)}
+      <header className="hero">
+        <div className="hero-brand">
+          <div className="hero-logo" aria-hidden="true">
+            T+
+          </div>
+          <div className="hero-copy">
+            <h1>Twitch Improved</h1>
+            <p>Configure declutter rules, watch heatmap, and saved history. Changes save as you make them.</p>
           </div>
         </div>
+        <p className={`hero-status${saveState === "error" ? " is-error" : ""}`}>{statusText}</p>
+      </header>
 
-        <p className="data-status">{dataError ? `Error: ${dataError}` : dataStatus}</p>
+      {loading || !settings || !counts ? (
+        <section className="ti-card">
+          <div className="ti-card-body">
+            <p className="ti-data-status">Loading saved settings and data...</p>
+          </div>
+        </section>
+      ) : (
+        <>
+          <DeclutterSection
+            title={declutterTitle}
+            value={settings.declutter}
+            onChange={(declutter) => persistSettings({ ...settings, declutter })}
+          />
 
-        <div className="data-actions">
-          <button type="button" onClick={handleExport} disabled={busyAction !== null}>
-            {busyAction === "export" ? "Exporting..." : "Export JSON"}
-          </button>
-          <label className="import-control">
-            <span>Import mode</span>
-            <select
-              value={importMode}
-              onChange={(event) => setImportMode(event.target.value as ImportMode)}
-              disabled={busyAction !== null}
-            >
-              <option value="merge">Merge</option>
-              <option value="replace">Replace</option>
-            </select>
-          </label>
-          <label className="file-button" aria-disabled={busyAction !== null}>
-            {busyAction === "import" ? "Importing..." : "Import JSON"}
-            <input
-              type="file"
-              accept="application/json,.json"
-              onChange={handleImportFile}
-              disabled={busyAction !== null}
-            />
-          </label>
-          <button type="button" className="danger" onClick={handleClearAll} disabled={busyAction !== null}>
-            {busyAction === "clear" ? "Clearing..." : "Clear all"}
-          </button>
-          <button type="button" onClick={() => void refreshDataPanel()} disabled={busyAction !== null}>
-            Refresh
-          </button>
-        </div>
+          <HeatmapSection
+            title={heatmapTitle}
+            value={settings.heatmap}
+            onChange={(heatmap) => persistSettings({ ...settings, heatmap })}
+          />
 
-        <div className="field-group">
-          <h3>Diagnostics</h3>
-          <p className="panel-description">Recent selector misses (latest first, up to 100).</p>
-          {diagnostics.length === 0 ? (
-            <p className="data-empty">No selector misses recorded.</p>
-          ) : (
-            <ul className="diagnostics-list">
-              {diagnostics.map((entry, index) => (
-                <li key={`${entry.id}-${entry.timestamp}-${index}`}>
-                  <code>{entry.id}</code> on <code>{entry.url}</code> at{" "}
-                  {new Date(entry.timestamp).toLocaleString()}
-                </li>
-              ))}
-            </ul>
-          )}
-        </div>
-      </section>
+          <DataSection
+            title={dataTitle}
+            counts={counts}
+            storageUsage={storageUsage}
+            diagnostics={diagnostics}
+            dataStatus={dataStatus}
+            dataError={dataError}
+            importMode={importMode}
+            busyAction={busyAction}
+            onImportModeChange={setImportMode}
+            onExport={handleExport}
+            onImport={handleImportFile}
+            onClearAll={handleClearAll}
+            onRefresh={() => {
+              void refreshDataPanel();
+            }}
+          />
+        </>
+      )}
     </main>
   );
 }
