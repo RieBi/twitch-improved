@@ -7,7 +7,8 @@
   "scripts": {
     "dev": "wxt",
     "build": "wxt build --browser chrome --mv3 && wxt build --browser firefox --mv3",
-    "test": "vitest run"
+    "test": "vitest run",
+    "zip:builds": "powershell -NoProfile -ExecutionPolicy Bypass -Command \"New-Item -ItemType Directory -Path 'releases' -Force | Out-Null; Compress-Archive -Path 'dist/chrome-mv3/*' -DestinationPath 'releases/twitch-improved-chrome-mv3.zip' -Force; Compress-Archive -Path 'dist/firefox-mv3/*' -DestinationPath 'releases/twitch-improved-firefox-mv3.zip' -Force\""
   },
   "keywords": [
     "browser-extension",

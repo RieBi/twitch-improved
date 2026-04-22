@@ -66,6 +66,10 @@ const ensureLinkSweepAlarm = async (): Promise<void> => {
 export default defineBackground(() => {
   void ensureLinkSweepAlarm();
 
+  browser.action.onClicked.addListener(() => {
+    void browser.runtime.openOptionsPage().catch(() => undefined);
+  });
+
   browser.runtime.onInstalled.addListener(() => {
     console.info("Twitch Improved background ready.");
     void ensureLinkSweepAlarm();

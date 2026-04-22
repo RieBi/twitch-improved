@@ -13,17 +13,17 @@ export default defineConfig({
     name: "Twitch Improved",
     description: "Declutter Twitch and show watch heatmaps for VODs.",
     icons: {
-      16: "assets/icons/icon-16.png",
-      32: "assets/icons/icon-32.png",
-      48: "assets/icons/icon-48.png",
-      96: "assets/icons/icon-96.png",
-      128: "assets/icons/icon-128.png"
+      16: "icons/icon-16.png",
+      32: "icons/icon-32.png",
+      48: "icons/icon-48.png",
+      96: "icons/icon-96.png",
+      128: "icons/icon-128.png"
     },
     action: {
       default_icon: {
-        16: "assets/icons/icon-16.png",
-        32: "assets/icons/icon-32.png",
-        48: "assets/icons/icon-48.png"
+        16: "icons/icon-16.png",
+        32: "icons/icon-32.png",
+        48: "icons/icon-48.png"
       }
     },
     permissions: ["storage", "scripting", "alarms"],
