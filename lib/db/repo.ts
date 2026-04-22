@@ -1,4 +1,4 @@
-import { openDatabase, type ChannelRecord, type LiveSessionRecord, type VodRecord } from "./schema";
+import { openDatabase, type LiveSessionRecord, type VodRecord } from "./schema";
 
 const withDb = openDatabase;
 
@@ -59,16 +59,6 @@ export async function getUnlinkedLiveSessions(): Promise<LiveSessionRecord[]> {
   const db = await withDb();
   const all = await db.getAll("liveSessions");
   return all.filter((record) => record.linkedVodId === null);
-}
-
-export async function putChannel(record: ChannelRecord): Promise<void> {
-  const db = await withDb();
-  await db.put("channels", record);
-}
-
-export async function getChannel(channelId: string): Promise<ChannelRecord | undefined> {
-  const db = await withDb();
-  return db.get("channels", channelId);
 }
 
 export async function commitVodLinkingTransaction(

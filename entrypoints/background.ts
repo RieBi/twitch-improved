@@ -1,29 +1,24 @@
 import browser from "webextension-polyfill";
 import type { Msg } from "../lib/messaging";
+import type { SelectorMissEvent } from "../lib/messaging";
+import { clearAllData, exportDataSnapshot, getDataSummary, importDataSnapshot } from "../lib/db/dataManagement";
 import { getVodsByIds } from "../lib/db/repo";
+import { DB_VERSION } from "../lib/db/schema";
 import { linkEligibleLiveSessionsToVod, runUnlinkedLiveSessionSweep } from "../lib/liveVodLinking";
 import { applyLiveFlush } from "../lib/liveFlush";
+import { createSelectorMissBuffer } from "../lib/selectorDiagnostics";
 import { toggleMarkedWatched } from "../lib/toggleMarkedWatched";
 import { applyVodFlush } from "../lib/vodFlush";
 import { installMainWorldMetadataBridge } from "./content/injected/mainWorld";
 
-interface SelectorMissEvent {
-  id: string;
-  url: string;
-  timestamp: number;
-}
-
 const MAX_SELECTOR_MISSES = 100;
-const selectorMissBuffer: SelectorMissEvent[] = [];
+const selectorMissBuffer = createSelectorMissBuffer(MAX_SELECTOR_MISSES);
 const SHOULD_LOG_FLUSH_DEBUG = import.meta.env.DEV;
 
 const LINK_SWEEP_ALARM = "td-live-vod-link-sweep";
 
 const pushSelectorMiss = (entry: SelectorMissEvent): void => {
   selectorMissBuffer.push(entry);
-  if (selectorMissBuffer.length > MAX_SELECTOR_MISSES) {
-    selectorMissBuffer.shift();
-  }
 };
 
 const executeMainWorldBridge = async (tabId: number, frameId: number): Promise<void> => {
@@ -126,8 +121,53 @@ export default defineBackground(() => {
 
       return Promise.resolve({
         ok: true,
-        buffered: selectorMissBuffer.length
+        buffered: selectorMissBuffer.size()
       });
+    }
+
+    if (typedMessage.type === "getDiagnostics") {
+      return Promise.resolve({
+        selectorMisses: selectorMissBuffer.snapshot(),
+        buffered: selectorMissBuffer.size()
+      });
+    }
+
+    if (typedMessage.type === "getDataSummary") {
+      return getDataSummary().catch(() => ({
+        counts: {
+          vods: 0,
+          liveSessions: 0
+        }
+      }));
+    }
+
+    if (typedMessage.type === "exportData") {
+      return exportDataSnapshot()
+        .then((snapshot) => ({ snapshot }))
+        .catch(() => ({
+          snapshot: {
+            exportedAt: Date.now(),
+            schemaVersion: DB_VERSION,
+            vods: [],
+            liveSessions: []
+          }
+        }));
+    }
+
+    if (typedMessage.type === "clearAllData") {
+      return clearAllData()
+        .then(() => ({ ok: true as const }))
+        .catch(() => ({ ok: false as const }));
+    }
+
+    if (typedMessage.type === "importData") {
+      return importDataSnapshot(typedMessage.mode, typedMessage.payload)
+        .then((result) => ({ ok: true as const, ...result }))
+        .catch(() => ({
+          ok: false as const,
+          mode: typedMessage.mode,
+          imported: { vods: 0, liveSessions: 0 }
+        }));
     }
 
     if (typedMessage.type === "flushRanges") {

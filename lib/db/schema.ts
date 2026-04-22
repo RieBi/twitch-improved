@@ -3,7 +3,7 @@ import { openDB, type DBSchema, type IDBPDatabase } from "idb";
 import type { Range } from "../util/ranges";
 
 export const DB_NAME = "twitch-decluttered";
-export const DB_VERSION = 1;
+export const DB_VERSION = 2;
 
 export interface VodRecord {
   vodId: string;
@@ -27,13 +27,6 @@ export interface LiveSessionRecord {
   lastUpdated: number;
 }
 
-export interface ChannelRecord {
-  channelId: string;
-  login: string;
-  displayName: string;
-  lastSeen: number;
-}
-
 export interface TwitchImprovedDb extends DBSchema {
   vods: {
     key: string;
@@ -51,10 +44,6 @@ export interface TwitchImprovedDb extends DBSchema {
       by_linked: string | null;
     };
   };
-  channels: {
-    key: string;
-    value: ChannelRecord;
-  };
 }
 
 let dbPromise: Promise<IDBPDatabase<TwitchImprovedDb>> | null = null;
@@ -68,7 +57,6 @@ const createStoresV1 = (db: IDBPDatabase<TwitchImprovedDb>): void => {
   liveSessions.createIndex("by_channel_startedAt", ["channelId", "streamStartedAt"]);
   liveSessions.createIndex("by_linked", "linkedVodId");
 
-  db.createObjectStore("channels", { keyPath: "channelId" });
 };
 
 export async function openDatabase(): Promise<IDBPDatabase<TwitchImprovedDb>> {
@@ -77,6 +65,9 @@ export async function openDatabase(): Promise<IDBPDatabase<TwitchImprovedDb>> {
       upgrade(db, oldVersion) {
         if (oldVersion < 1) {
           createStoresV1(db);
+        }
+        if (oldVersion < 2 && db.objectStoreNames.contains("channels")) {
+          db.deleteObjectStore("channels");
         }
       }
     });

@@ -15,6 +15,7 @@ const STYLE_ID = "td-declutter";
 const PREHIDE_STYLE_ID = "td-declutter-prehide";
 const TAG_ATTRIBUTE = "data-td-hide";
 const MAIN_FEED_BELOW_CAROUSEL_TAG = "main-feed-below-carousel";
+const GLOBAL_GET_AD_FREE_BUTTON_TAG = "global-get-ad-free-button";
 const WATCHDOG_INTERVAL_MS = 30_000;
 const REPORT_COOLDOWN_MS = 5 * 60_000;
 
@@ -156,6 +157,33 @@ const applyMainFeedBelowCarouselTag = (settings: Settings, url: URL): void => {
   }
 };
 
+const applyGlobalGetAdFreeButtonTag = (settings: Settings): void => {
+  const existingTagged = document.querySelectorAll<HTMLElement>(
+    `[${TAG_ATTRIBUTE}="${GLOBAL_GET_AD_FREE_BUTTON_TAG}"]`
+  );
+  for (const tagged of existingTagged) {
+    tagged.removeAttribute(TAG_ATTRIBUTE);
+  }
+
+  if (!settings.declutter.global.hideGetAdFreeButton) {
+    return;
+  }
+
+  const labelNodes = document.querySelectorAll<HTMLElement>('[data-a-target="tw-core-button-label-text"]');
+  for (const labelNode of labelNodes) {
+    if (labelNode.textContent?.trim() !== "Get Ad-Free") {
+      continue;
+    }
+
+    const button = labelNode.closest<HTMLElement>("button, a");
+    if (!button) {
+      continue;
+    }
+
+    button.setAttribute(TAG_ATTRIBUTE, GLOBAL_GET_AD_FREE_BUTTON_TAG);
+  }
+};
+
 const suppressCarouselMediaPlayback = (settings: Settings, url: URL): void => {
   if (!shouldSuppressCarouselMedia(settings, url)) {
     return;
@@ -221,6 +249,7 @@ const applyDeclutter = (): void => {
 
   const currentUrl = new URL(window.location.href);
   applyMainFeedBelowCarouselTag(currentSettings, currentUrl);
+  applyGlobalGetAdFreeButtonTag(currentSettings);
 
   const css = buildDeclutterCss(currentSettings, currentUrl);
   ensureStyleElement().textContent = css;

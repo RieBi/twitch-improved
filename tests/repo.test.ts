@@ -7,18 +7,15 @@ import {
   DB_VERSION,
   closeDatabase,
   openDatabase,
-  type ChannelRecord,
   type LiveSessionRecord,
   type VodRecord
 } from "../lib/db/schema";
 import {
-  getChannel,
   getLiveSession,
   getLiveSessionsByChannelSince,
   getUnlinkedLiveSessions,
   getVod,
   getVodsByChannel,
-  putChannel,
   putLiveSession,
   putVod
 } from "../lib/db/repo";
@@ -53,14 +50,6 @@ const buildLive = (overrides: Partial<LiveSessionRecord> = {}): LiveSessionRecor
   ...overrides
 });
 
-const buildChannel = (overrides: Partial<ChannelRecord> = {}): ChannelRecord => ({
-  channelId: "c-1",
-  login: "channel_one",
-  displayName: "Channel One",
-  lastSeen: now,
-  ...overrides
-});
-
 afterEach(async () => {
   await closeDatabase();
   await deleteDB(DB_NAME);
@@ -72,7 +61,7 @@ describe("db schema contract", () => {
 
     expect(db.name).toBe(DB_NAME);
     expect(db.version).toBe(DB_VERSION);
-    expect(Array.from(db.objectStoreNames).sort()).toEqual(["channels", "liveSessions", "vods"]);
+    expect(Array.from(db.objectStoreNames).sort()).toEqual(["liveSessions", "vods"]);
 
     const tx = db.transaction("vods", "readonly");
     expect(Array.from(tx.store.indexNames).sort()).toEqual(["by_channel", "by_lastUpdated"]);
@@ -197,13 +186,6 @@ describe("db repository contract", () => {
         markedWatched: true
       })
     );
-  });
-
-  it("writes and reads channels by key", async () => {
-    const channel = buildChannel();
-    await putChannel(channel);
-
-    expect(await getChannel(channel.channelId)).toEqual(channel);
   });
 
   it("writes and reads live sessions by key and indexes", async () => {

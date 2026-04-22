@@ -45,6 +45,22 @@ describe("declutter rules", () => {
     expect(css).toContain('[data-td-hide="main-feed-below-carousel"]');
   });
 
+  it("maps hideGetAdFreeButton to tagged ad-free button selector", () => {
+    const settings = withSettings((settings) => ({
+      ...settings,
+      declutter: {
+        ...settings.declutter,
+        global: {
+          ...settings.declutter.global,
+          hideGetAdFreeButton: true
+        }
+      }
+    }));
+
+    const css = buildDeclutterCss(settings, new URL("https://www.twitch.tv/somechannel"));
+    expect(css).toContain('[data-td-hide="global-get-ad-free-button"]');
+  });
+
   it("keeps channel-root rules off reserved top-level routes", () => {
     const settings = withSettings((settings) => ({
       ...settings,

@@ -60,8 +60,8 @@ export const selectors: Record<SelectorId, SelectorDef> = {
   },
   globalGetAdFreeButton: {
     id: "globalGetAdFreeButton",
-    primary: 'button[aria-label*="Ad-Free" i]',
-    fallbacks: ['a[aria-label*="Ad-Free" i]'],
+    primary: '[data-td-hide="global-get-ad-free-button"]',
+    fallbacks: [],
     health: "optional"
   }
 };
