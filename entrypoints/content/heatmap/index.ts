@@ -17,7 +17,18 @@ import {
 const HEATMAP_STYLE_ID = "td-heatmap-style";
 const BATCH_FETCH_DELAY_MS = 50;
 const MISSING_RECORD_REFETCH_MS = 15_000;
-const SHOULD_LOG_HEATMAP_DEBUG = import.meta.env.DEV;
+const HEATMAP_VERBOSE_DEBUG_FLAG = "td:heatmap-verbose-debug";
+const SHOULD_LOG_HEATMAP_DEBUG = (() => {
+  if (!import.meta.env.DEV) {
+    return false;
+  }
+
+  try {
+    return window.localStorage.getItem(HEATMAP_VERBOSE_DEBUG_FLAG) === "1";
+  } catch {
+    return false;
+  }
+})();
 const DEBUG_ENABLED = import.meta.env.DEV;
 const DEBUG_ATTR = "data-td-heatmap-debug";
 const DEBUG_BOOT_ATTR = "data-td-heatmap-boot";

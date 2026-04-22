@@ -225,3 +225,23 @@
   pointer-events: none;
   font-family: Inter, "Helvetica Neue", Arial, sans-serif;
 }
+
+.td-player-heatmap {
+  position: absolute !important;
+  left: 0 !important;
+  right: 0 !important;
+  bottom: 100% !important;
+  margin-bottom: 2px !important;
+  height: 4px !important;
+  pointer-events: none !important;
+  z-index: 10001 !important;
+  overflow: hidden !important;
+}
+
+.td-player-heatmap-seg {
+  position: absolute !important;
+  top: 0 !important;
+  height: 100% !important;
+  background-color: var(--td-indicator-color, #9147ff) !important;
+  opacity: 1 !important;
+}

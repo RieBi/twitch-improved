@@ -1,10 +1,14 @@
 /** @vitest-environment happy-dom */
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { createVodTrackerLifecycle } from "../entrypoints/content/tracker/vodTrackerLifecycle";
 import { VOD_EVENT_NAME } from "../entrypoints/content/tracker/streamMetadata";
 
 describe("vodTracker lifecycle", () => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
   it("does not duplicate tracker for same VOD route and stops on route exits", async () => {
     const starts: string[] = [];
     const stops: string[] = [];
@@ -52,6 +56,33 @@ describe("vodTracker lifecycle", () => {
     await lifecycle.stop();
 
     expect(starts).toEqual(["100", "200"]);
+    expect(stops).toEqual(["100", "200"]);
+  });
+
+  it("route watchdog resyncs when URL changes without explicit sync", async () => {
+    vi.useFakeTimers();
+    const starts: string[] = [];
+    const stops: string[] = [];
+
+    const lifecycle = createVodTrackerLifecycle(async (vodId) => {
+      starts.push(vodId);
+      return {
+        vodId,
+        stop: async () => {
+          stops.push(vodId);
+        }
+      };
+    });
+
+    await lifecycle.sync(new URL("https://www.twitch.tv/videos/100"));
+    expect(starts).toEqual(["100"]);
+
+    window.history.pushState({}, "", "/videos/200");
+    await vi.advanceTimersByTimeAsync(600);
+
+    expect(starts).toEqual(["100", "200"]);
+    expect(stops).toEqual(["100"]);
+    await lifecycle.stop();
     expect(stops).toEqual(["100", "200"]);
   });
 });
